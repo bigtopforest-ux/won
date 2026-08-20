@@ -964,11 +964,12 @@ function computeSummary(farms){
     const b = f.stage_bucket || classifyStage(f.접촉단계, normalizeStatus(f));
     stage_dist[b] = (stage_dist[b]||0)+1;
   });
-  const owner_dist = {}, owner_active = {}, owner_drop = {}, owner_contract = {};
+  const owner_dist = {}, owner_active = {}, owner_drop = {}, owner_contract = {}, owner_scale = {};
   farms.forEach(f=>{
     const o = f.담당자 || '미지정';
     const st = normalizeStatus(f);
     owner_dist[o] = (owner_dist[o]||0)+1;
+    owner_scale[o] = (owner_scale[o]||0) + (Number(f.규모)||0);
     if(st==='드랍') owner_drop[o] = (owner_drop[o]||0)+1;
     else if(st==='계약완료') owner_contract[o] = (owner_contract[o]||0)+1;
     else owner_active[o] = (owner_active[o]||0)+1;
@@ -976,7 +977,7 @@ function computeSummary(farms){
   const region_count = {};
   farms.forEach(f=>{ if(f.지역) region_count[f.지역] = (region_count[f.지역]||0)+1; });
   const region_dist = Object.entries(region_count).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  return { total, active, contracted, dropped, monthly_new, stage_dist, owner_dist, owner_active, owner_drop, owner_contract, region_dist };
+  return { total, active, contracted, dropped, monthly_new, stage_dist, owner_dist, owner_active, owner_drop, owner_contract, owner_scale, region_dist };
 }
 
 async function apiRequest(method, body){
@@ -1030,17 +1031,23 @@ function renderCharts(){
   const s = computeSummary(FARMS);
   Object.values(charts).forEach(c=>c && c.destroy());
 
+  const ownerKeys = Object.keys(s.owner_dist);
   charts.owner = new Chart(document.getElementById('chartOwner'), {
     type:'bar',
     data:{
-      labels: Object.keys(s.owner_dist),
+      labels: ownerKeys,
       datasets:[
-        {label:'진행중', data:Object.keys(s.owner_dist).map(k=>s.owner_active[k]||0), backgroundColor:'#C8102E'},
-        {label:'계약완료', data:Object.keys(s.owner_dist).map(k=>s.owner_contract[k]||0), backgroundColor:'#4C7A2E'},
-        {label:'드랍', data:Object.keys(s.owner_dist).map(k=>s.owner_drop[k]||0), backgroundColor:'#C7BDB4'},
+        {label:'진행중', data:ownerKeys.map(k=>s.owner_active[k]||0), backgroundColor:'#C8102E', yAxisID:'y', stack:'count'},
+        {label:'계약완료', data:ownerKeys.map(k=>s.owner_contract[k]||0), backgroundColor:'#4C7A2E', yAxisID:'y', stack:'count'},
+        {label:'드랍', data:ownerKeys.map(k=>s.owner_drop[k]||0), backgroundColor:'#C7BDB4', yAxisID:'y', stack:'count'},
+        {type:'line', label:'규모(두)', data:ownerKeys.map(k=>s.owner_scale[k]||0), borderColor:'#4A7FA8', backgroundColor:'#4A7FA8', yAxisID:'y1', tension:.3},
       ]
     },
-    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{boxWidth:10,font:{size:11}}}}, scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true,max:20,ticks:{stepSize:1,precision:0}}}}
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{boxWidth:10,font:{size:11}}}}, scales:{
+      x:{stacked:true},
+      y:{stacked:true, beginAtZero:true, max:20, ticks:{stepSize:1,precision:0}, position:'left', title:{display:true,text:'건수',font:{size:10}}},
+      y1:{beginAtZero:true, position:'right', grid:{drawOnChartArea:false}, title:{display:true,text:'규모(두)',font:{size:10}}},
+    }}
   });
 
   const stageLabels = Object.keys(s.stage_dist);
