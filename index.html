@@ -317,6 +317,10 @@
 </div>
 <div id="view-farms" class="view">
 
+  <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+    <button class="tab-btn active" onclick="exportFarmsToExcel(event)">📊 신규거래처 엑셀 다운로드</button>
+  </div>
+
   <div class="kpi-row" id="kpi-row"></div>
 
   <div class="charts">
@@ -1012,8 +1016,9 @@ function renderKPI(){
     {num: s.active, label: '진행중 파이프라인'},
     {num: s.contracted, label: '계약완료'},
     {num: s.dropped, label: '드랍(제외)'},
-    {num: s.owner_active['신동영']||0, label: '신동영 진행중'},
-    {num: s.owner_active['김영진']||0, label: '김영진 진행중'},
+    {num: s.owner_active['유재방']||0, label: '유재방 진행중'},
+    {num: s.owner_active['정동현']||0, label: '정동현 진행중'},
+    {num: s.owner_active['이원희']||0, label: '이원희 진행중'},
   ];
   document.getElementById('kpi-row').innerHTML = kpis.map(k=>`<div class="kpi"><div class="label">${k.label}</div><div class="num">${k.num}</div></div>`).join('');
   return s;
@@ -1171,8 +1176,8 @@ document.getElementById('search').addEventListener('input', renderTable);
 ['filterOwner','filterRegion','filterStage','farmsPageSize'].forEach(id=>document.getElementById(id).addEventListener('change', renderTable));
 
 const FIELD_LABELS = {
-  담당자:'담당자', 지역:'지역', 규모:'규모', 돈사형태:'돈사형태', 접촉단계:'접촉단계',
-  가능성:'가능성(%)', 등급:'등급', 대여금유무:'대여금', 사양가니즈:'니즈/메모', 차주액션:'차주 액션',
+  담당자:'담당자', 농장주:'농장주', 지역:'지역', 규모:'규모', 돈사형태:'돈사형태', 접촉단계:'접촉단계',
+  가능성:'가능성(%)', 거래가능일자:'거래가능일자', 등급:'등급', 대여금유무:'대여금', 사양가니즈:'니즈/메모', 차주액션:'차주 액션',
 };
 
 function openModal(id){
@@ -1189,10 +1194,12 @@ function renderModalView(f){
     <button class="close-btn" onclick="closeModal()">&times;</button>
     <h2>${f.농가명 || '(이름 없음)'}</h2>
     <div class="sub">${f.담당자||'-'} 담당 · ${f.지역||'-'} · ${normalizeStatus(f)}</div>
+    <div class="kv"><div class="k">농장주</div><div>${f.농장주||'-'}</div></div>
     <div class="kv"><div class="k">규모</div><div>${f.규모||'-'}</div></div>
     <div class="kv"><div class="k">돈사형태</div><div>${f.돈사형태||'-'}</div></div>
     <div class="kv"><div class="k">접촉단계</div><div>${f.접촉단계||'-'}</div></div>
     <div class="kv"><div class="k">가능성</div><div>${fmtProb(f.가능성)}</div></div>
+    <div class="kv"><div class="k">거래가능일자</div><div>${f.거래가능일자||'-'}</div></div>
     <div class="kv"><div class="k">등급</div><div>${f.등급||'-'}</div></div>
     <div class="kv"><div class="k">대여금</div><div>${f.대여금유무||'-'}</div></div>
     <div class="kv"><div class="k">니즈/메모</div><div>${(f.사양가니즈||'-').replace(/\n/g,'<br>')}</div></div>
@@ -1215,7 +1222,7 @@ function renderModalView(f){
 function renderModalEdit(id){
   const f = FARMS.find(x=>x.id===id);
   const modal = document.getElementById('modal');
-  const fields = ['담당자','지역','규모','돈사형태','접촉단계','가능성','등급','대여금유무','사양가니즈','차주액션'];
+  const fields = ['담당자','농장주','지역','규모','돈사형태','접촉단계','가능성','거래가능일자','등급','대여금유무','사양가니즈','차주액션'];
   modal.innerHTML = `
     <button class="close-btn" onclick="closeModal()">&times;</button>
     <h2>${f.농가명 || '(이름 없음)'} 수정</h2>
@@ -1253,7 +1260,7 @@ function renderModalEdit(id){
 
 async function saveEdit(id){
   const updates = { 농가명: document.getElementById('edit-농가명').value };
-  ['담당자','지역','규모','돈사형태','접촉단계','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
+  ['담당자','농장주','지역','규모','돈사형태','접촉단계','거래가능일자','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
     updates[k] = document.getElementById('edit-'+k).value;
   });
   const probRaw = document.getElementById('edit-가능성').value.trim();
@@ -1289,7 +1296,7 @@ async function deleteFarm(id){
 
 function openAddModal(){
   const modal = document.getElementById('modal');
-  const fields = ['담당자','지역','규모','돈사형태','접촉단계','가능성','등급','대여금유무','사양가니즈','차주액션'];
+  const fields = ['담당자','농장주','지역','규모','돈사형태','접촉단계','가능성','거래가능일자','등급','대여금유무','사양가니즈','차주액션'];
   modal.innerHTML = `
     <button class="close-btn" onclick="closeModal()">&times;</button>
     <h2>새 거래처 추가</h2>
@@ -1320,7 +1327,7 @@ function openAddModal(){
 
 async function saveNew(){
   const updates = { 농가명: document.getElementById('edit-농가명').value };
-  ['담당자','지역','규모','돈사형태','접촉단계','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
+  ['담당자','농장주','지역','규모','돈사형태','접촉단계','거래가능일자','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
     updates[k] = document.getElementById('edit-'+k).value;
   });
   const probRaw = document.getElementById('edit-가능성').value.trim();
@@ -7680,6 +7687,113 @@ async function exportReportToExcel(evt){
     const ws = buildReportWorkbook(XS, mon, sections);
     XS.utils.book_append_sheet(wb, ws, '종합보고');
     XS.writeFile(wb, `종합보고_${mon}.xlsx`);
+  }catch(e){
+    alert('엑셀 생성 실패: ' + e.message);
+  }finally{
+    if(btn){ btn.textContent = origText; btn.disabled = false; }
+  }
+}
+
+// 신규거래처 리스트를 담당자별로 정리한 엑셀 워크북 (참고 서식: 담당자/농장/농장주/사육규모/가능성/거래가능일자/진행상황)
+function buildFarmsWorkbook(XS, farms){
+  const ws = {};
+  const merges = [];
+  const headers = ['담당자','농장','농장주','지역','사육규모','가능성','거래가능일자','접촉단계','상태','니즈/메모','차주액션'];
+  const NCOLS = headers.length;
+  let r = 0;
+
+  function put(row, col, v, style){
+    const addr = XS.utils.encode_cell({r:row, c:col});
+    ws[addr] = { t: typeof v==='number' ? 'n' : 's', v: (v===undefined||v===null) ? '' : v, s: style };
+  }
+  function fillRow(row, style, fromCol, toCol){
+    for(let c=fromCol; c<=toCol; c++){
+      const addr = XS.utils.encode_cell({r:row, c});
+      if(!ws[addr]) ws[addr] = { t:'s', v:'', s: style };
+    }
+  }
+
+  const today = localDateStr(new Date());
+
+  const titleBorder = { bottom: { style:'medium', color:{rgb:REPORT_XLSX_COLORS.accent} } };
+  put(r, 0, `4팀 신규거래처 현황 · ${today}`, { font:{bold:true, sz:16, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.title}}, alignment:{vertical:'center', horizontal:'left', indent:1}, border: titleBorder });
+  fillRow(r, { fill:{fgColor:{rgb:REPORT_XLSX_COLORS.title}}, border: titleBorder }, 1, NCOLS-1);
+  merges.push({s:{r,c:0}, e:{r,c:NCOLS-1}});
+  ws['!rows'] = ws['!rows'] || [];
+  ws['!rows'][r] = { hpt: 28 };
+  r++;
+  put(r, 0, `생성일시: ${new Date().toLocaleString('ko-KR')}`, { font:{sz:9.5, color:{rgb:'6E6260'}, italic:true}, alignment:{vertical:'center', horizontal:'left', indent:1} });
+  fillRow(r, {}, 1, NCOLS-1);
+  merges.push({s:{r,c:0}, e:{r,c:NCOLS-1}});
+  r += 2;
+
+  headers.forEach((h, c)=>{
+    put(r, c, h, { font:{bold:true, sz:10.5, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.header}}, alignment:{vertical:'center', horizontal:'center'}, border: reportXlsxBorder() });
+  });
+  r++;
+
+  const statusOrder = {진행중:0, 계약완료:1, 드랍:2};
+  const sorted = farms.slice().sort((a,b)=>{
+    const oa = a.담당자||'', ob = b.담당자||'';
+    if(oa!==ob) return oa.localeCompare(ob,'ko');
+    const sa = normalizeStatus(a), sb = normalizeStatus(b);
+    if(statusOrder[sa]!==statusOrder[sb]) return statusOrder[sa]-statusOrder[sb];
+    return (Number(b.가능성)||0) - (Number(a.가능성)||0);
+  });
+
+  let totalScale = 0;
+  sorted.forEach((f, ri)=>{
+    const alt = ri % 2 === 1;
+    const status = normalizeStatus(f);
+    const row = [
+      f.담당자||'-', f.농가명||'-', f.농장주||'-', f.지역||'-',
+      f.규모||'-', fmtProb(f.가능성), f.거래가능일자||'-', f.접촉단계||'-',
+      status, f.사양가니즈||'', f.차주액션||'',
+    ];
+    totalScale += Number(f.규모)||0;
+    row.forEach((v,c)=>{
+      put(r, c, v, {
+        font:{sz:10.5, color:{rgb:'333333'}, bold: c===0||c===1},
+        fill:{fgColor:{rgb: alt?REPORT_XLSX_COLORS.altRow:'FFFFFF'}},
+        border: reportXlsxBorder(),
+        alignment:{vertical:'center', horizontal: (c===9||c===10)?'left':'center', indent:(c===9||c===10)?1:0, wrapText:true},
+      });
+    });
+    r++;
+  });
+
+  if(!sorted.length){
+    put(r, 0, '데이터 없음', { font:{sz:10, italic:true, color:{rgb:'6E6260'}}, border: reportXlsxBorder() });
+    for(let c=1;c<NCOLS;c++) put(r,c,'',{border:reportXlsxBorder()});
+    r++;
+  } else {
+    put(r, 0, '합계', { font:{bold:true, sz:10.5, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder(), alignment:{vertical:'center', horizontal:'center'} });
+    put(r, 1, `${sorted.length}건`, { font:{bold:true, sz:10.5, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder(), alignment:{vertical:'center', horizontal:'center'} });
+    put(r, 4, totalScale, { font:{bold:true, sz:10.5, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder(), alignment:{vertical:'center', horizontal:'center'} });
+    for(let c=2;c<NCOLS;c++){
+      if(c===4) continue;
+      put(r, c, '', { fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder() });
+    }
+    r++;
+  }
+
+  ws['!ref'] = XS.utils.encode_range({s:{r:0,c:0}, e:{r:r, c:NCOLS-1}});
+  ws['!merges'] = merges;
+  ws['!cols'] = [ {wch:10}, {wch:18}, {wch:10}, {wch:10}, {wch:10}, {wch:9}, {wch:12}, {wch:14}, {wch:9}, {wch:30}, {wch:30} ];
+  return ws;
+}
+
+async function exportFarmsToExcel(evt){
+  const btn = evt && evt.target;
+  const origText = btn ? btn.textContent : '';
+  if(btn){ btn.textContent = '엑셀 생성 중...'; btn.disabled = true; }
+  try{
+    const XS = await loadXlsxStyleLib();
+    const wb = XS.utils.book_new();
+    const ws = buildFarmsWorkbook(XS, FARMS);
+    XS.utils.book_append_sheet(wb, ws, '신규거래처');
+    const today = localDateStr(new Date());
+    XS.writeFile(wb, `4팀_신규거래처_${today}.xlsx`);
   }catch(e){
     alert('엑셀 생성 실패: ' + e.message);
   }finally{
