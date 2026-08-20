@@ -7696,12 +7696,18 @@ async function exportReportToExcel(evt){
   }
 }
 
-// 니즈/메모·차주액션처럼 여러 줄로 길게 적힌 메모를 표에서 한눈에 보기 좋게 첫 줄 기준으로 간략히 요약
-function briefText(s, maxLen){
-  maxLen = maxLen || 70;
-  if(!s) return '';
-  const firstLine = String(s).split('\n').map(l=>l.trim()).find(l=>l) || '';
-  return firstLine.length > maxLen ? firstLine.slice(0, maxLen-1) + '…' : firstLine;
+// 니즈/메모·차주액션처럼 여러 줄로 길게 적힌 메모를 정리: 빈 줄과 구분선(---) 제거하고
+// 최대 줄 수만 남겨서 줄바꿈은 유지한 채 한눈에 들어오게 함
+function cleanNotes(s, maxLines){
+  maxLines = maxLines || 5;
+  if(!s) return { text:'', lines:0 };
+  const lines = String(s).split('\n')
+    .map(l=>l.trim())
+    .filter(l=>l && !/^-{5,}$/.test(l));
+  const truncated = lines.length > maxLines;
+  const limited = lines.slice(0, maxLines);
+  if(truncated) limited.push('…');
+  return { text: limited.join('\n'), lines: limited.length };
 }
 
 // 신규거래처 리스트를 담당자별로 정리한 엑셀 워크북 (참고 서식: 담당자/농장/농장주/사육규모/가능성/거래가능일자/진행상황)
@@ -7755,20 +7761,25 @@ function buildFarmsWorkbook(XS, farms){
   sorted.forEach((f, ri)=>{
     const alt = ri % 2 === 1;
     const status = normalizeStatus(f);
+    const nizInfo = cleanNotes(f.사양가니즈);
+    const actionInfo = cleanNotes(f.차주액션);
     const row = [
       f.담당자||'-', f.농가명||'-', f.농장주||'-', f.지역||'-',
       f.규모||'-', fmtProb(f.가능성), f.거래가능일자||'-', f.접촉단계||'-',
-      status, briefText(f.사양가니즈) || '-', briefText(f.차주액션) || '-',
+      status, nizInfo.text || '-', actionInfo.text || '-',
     ];
     totalScale += Number(f.규모)||0;
     row.forEach((v,c)=>{
+      const isNote = c===9||c===10;
       put(r, c, v, {
         font:{sz:10.5, color:{rgb:'333333'}, bold: c===0||c===1},
         fill:{fgColor:{rgb: alt?REPORT_XLSX_COLORS.altRow:'FFFFFF'}},
         border: reportXlsxBorder(),
-        alignment:{vertical:'center', horizontal: (c===9||c===10)?'left':'center', indent:(c===9||c===10)?1:0, wrapText:false},
+        alignment:{vertical: isNote?'top':'center', horizontal: isNote?'left':'center', indent:isNote?1:0, wrapText:isNote},
       });
     });
+    const lineCount = Math.max(1, nizInfo.lines, actionInfo.lines);
+    ws['!rows'][r] = { hpt: Math.min(14*lineCount + 8, 110) };
     r++;
   });
 
