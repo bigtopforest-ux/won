@@ -224,6 +224,22 @@ export default async (req, context) => {
       return json({ ok: true, farm: data[idx] });
     }
 
+    if (action === "deleteFarm") {
+      const { id } = body;
+      if (id === null || id === undefined) return json({ error: "id required" }, 400);
+
+      let data = await loadFarms(s);
+      const idx = data.findIndex((f) => f.id === id);
+      if (idx === -1) return json({ error: "not found" }, 404);
+
+      const images = Array.isArray(data[idx].이미지목록) ? data[idx].이미지목록 : [];
+      await Promise.all(images.map((im) => imageStore().delete(im.key).catch(() => {})));
+
+      data = data.filter((f) => f.id !== id);
+      await s.setJSON(KEY, data);
+      return json({ ok: true });
+    }
+
     return json({ error: "unknown action" }, 404);
   }
 

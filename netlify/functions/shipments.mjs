@@ -133,24 +133,29 @@ export default async (req, context) => {
       }
     }
 
+    // 출하 거래처 목록 (기타 제외). index.html의 SHIP_COMPANY_LIST와 동일하게 유지해야 함.
+    const SHIP_COMPANIES = ["약감포크", "동아미트", "이서푸드", "영천", "신선"];
+
     if (action === "saveWeekPlan") {
-      // 주간 계획은 거래처(일호/참푸른) 구분 없이 원료돈 계획두수 하나로 관리 (실적만 거래처별로 계속 표시됨)
-      // 차주 예상물량은 일호식품/참푸른/기타(신선,위축) 3개 항목으로 나눠서 입력받고 합계를 차주예상두수로 저장
-      const { 주차시작일, 지역부장, 계획두수, 차주예상일호, 차주예상참푸른, 차주예상기타 } = body;
+      // 주간 계획은 거래처 구분 없이 원료돈 계획두수 하나로 관리 (실적만 거래처별로 계속 표시됨)
+      // 차주 예상물량은 거래처별(약감포크/동아미트/이서푸드/영천/신선) + 기타 항목으로 나눠서 입력받고 합계를 차주예상두수로 저장
+      const { 주차시작일, 지역부장, 계획두수 } = body;
       if (!주차시작일 || !지역부장) return json({ error: "주차시작일, 지역부장 required" }, 400);
       const plans = await loadWeekPlans(s);
       const idx = plans.findIndex((p) => p.주차시작일 === 주차시작일 && p.지역부장 === 지역부장);
-      const 예상일호 = Number(차주예상일호) || 0;
-      const 예상참푸른 = Number(차주예상참푸른) || 0;
-      const 예상기타 = Number(차주예상기타) || 0;
+      const nextBreakdown = {};
+      let 차주예상두수 = 0;
+      [...SHIP_COMPANIES, "기타"].forEach((c) => {
+        const v = Number(body["차주예상" + c]) || 0;
+        nextBreakdown["차주예상" + c] = v;
+        차주예상두수 += v;
+      });
       const entry = {
         주차시작일,
         지역부장,
         계획두수: Number(계획두수) || 0,
-        차주예상일호: 예상일호,
-        차주예상참푸른: 예상참푸른,
-        차주예상기타: 예상기타,
-        차주예상두수: 예상일호 + 예상참푸른 + 예상기타,
+        ...nextBreakdown,
+        차주예상두수,
         수정자: editor || "",
         수정시각: now,
       };
@@ -161,20 +166,22 @@ export default async (req, context) => {
     }
 
     if (action === "saveMonthPlan") {
-      const { 연월, 지역부장, 계획일호, 계획참푸른, 계획기타 } = body;
+      const { 연월, 지역부장 } = body;
       if (!연월 || !지역부장) return json({ error: "연월, 지역부장 required" }, 400);
       const plans = await loadMonthPlans(s);
       const idx = plans.findIndex((p) => p.연월 === 연월 && p.지역부장 === 지역부장);
-      const 일호 = Number(계획일호) || 0;
-      const 참푸른 = Number(계획참푸른) || 0;
-      const 기타 = Number(계획기타) || 0;
+      const breakdown = {};
+      let 계획두수 = 0;
+      [...SHIP_COMPANIES, "기타"].forEach((c) => {
+        const v = Number(body["계획" + c]) || 0;
+        breakdown["계획" + c] = v;
+        계획두수 += v;
+      });
       const entry = {
         연월,
         지역부장,
-        계획일호: 일호,
-        계획참푸른: 참푸른,
-        계획기타: 기타,
-        계획두수: 일호 + 참푸른 + 기타,
+        ...breakdown,
+        계획두수,
         수정자: editor || "",
         수정시각: now,
       };

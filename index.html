@@ -1202,7 +1202,10 @@ function renderModalView(f){
     ${f.최근수정자 ? `<div class="kv"><div class="k">최근 수정</div><div>${f.최근수정자} · ${f.최근수정시각 ? new Date(f.최근수정시각).toLocaleString('ko-KR') : ''}</div></div>` : ''}
     <div class="section-title" style="font-size:14px;margin-top:16px;">농장 이미지</div>
     ${farmImageGalleryHtml(f, false)}
-    <button class="tab-btn" style="margin-top:14px;width:100%;justify-content:center;" onclick="renderModalEdit(${f.id})">✎ 수정</button>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button class="tab-btn" style="flex:1;justify-content:center;" onclick="renderModalEdit(${f.id})">✎ 수정</button>
+      <button class="tab-btn" style="flex:1;justify-content:center;color:#B0281F;" onclick="deleteFarm(${f.id})">🗑 삭제</button>
+    </div>
     ${f.이력 && f.이력.length ? `<div class="section-title" style="font-size:14px;margin-top:16px;">진행 이력 (${f.이력.length}회)</div>` + f.이력.slice().reverse().map(h=>`
       <div class="hist-item"><span class="hm">${h.month}월 ${h.week}주</span> — ${h.접촉단계||'-'} ${h.가능성!==null && h.가능성!==undefined ? '('+Math.round(h.가능성*100)+'%)' : ''}${h.차주액션 ? '<br><span style="color:#8B7355">'+h.차주액션.replace(/\n/g,' ')+'</span>' : ''}</div>
     `).join('') : ''}
@@ -1267,6 +1270,20 @@ async function saveEdit(id){
   }catch(e){
     errBox.textContent = '저장 실패: ' + e.message;
     errBox.style.display = 'block';
+  }
+}
+
+async function deleteFarm(id){
+  const f = FARMS.find(x=>x.id===id);
+  if(!f) return;
+  if(!confirm(`"${f.농가명 || '(이름 없음)'}" 거래처를 삭제할까요?\n이 작업은 되돌릴 수 없습니다.`)) return;
+  try{
+    await apiRequest('POST', { action:'deleteFarm', id });
+    FARMS = FARMS.filter(x=>x.id!==id);
+    closeModal();
+    renderAll();
+  }catch(e){
+    alert('삭제 실패: ' + e.message);
   }
 }
 
@@ -2326,12 +2343,12 @@ function excelSerialToDateStr(v){
   return v ? String(v) : '';
 }
 
-// 파일명 패턴: "번호. 날짜 농가명 거래처 두수" (예: "20. 0601 민서 일호 41.xls")
+// 파일명 패턴: "번호. 날짜 농가명 거래처 두수" (예: "20. 0601 민서 동아미트 41.xls")
 // 순수 숫자 토큰(번호/날짜/두수)과 거래처명을 제거하고 남는 단어를 농가명으로 사용
 function extractFarmNameFromFilename(filename){
   if(!filename) return '';
   const base = filename.replace(/\.(xlsx|xls)$/i, '');
-  const knownCompanies = ['일호','참푸른', ...Object.values(PLANT_COMPANY_ALIASES), ...Object.keys(PLANT_COMPANY_ALIASES)];
+  const knownCompanies = ['약감포크','동아미트','이서푸드','영천','신선', ...Object.values(PLANT_COMPANY_ALIASES), ...Object.keys(PLANT_COMPANY_ALIASES)];
   const tokens = base.split(/\s+/).filter(Boolean).filter(t=>{
     if(/^\d+\.?$/.test(t)) return false;
     if(knownCompanies.some(c=>c && t.includes(c))) return false;
@@ -2548,7 +2565,7 @@ function parseShipmentAgeFile(rows2d){
 
 // 같은 농장+출하일+거래처 안에서도 그룹(전표)별로 두수·일령을 먼저 모으고(같은 그룹은 두수 가중평균으로 합침),
 // 그 그룹별 값들을 다시 두수 가중평균해서 농장+출하일+거래처 전체의 반영값을 만든다.
-// 참푸른/일호처럼 같은 농장이 같은 날 서로 다른 거래처로 나눠 출하되면 출하기록도 거래처별로 별도 저장돼 있으므로,
+// 같은 농장이 같은 날 서로 다른 거래처로 나눠 출하되는 경우처럼 출하기록도 거래처별로 별도 저장돼 있으므로,
 // 거래처까지 구분해서 묶지 않으면 엉뚱한 기록에 값이 반영된다. 그룹별 상세는 화면에 보여주기 위해 함께 반환.
 function groupShipmentAgeRows(rows){
   const subMap = new Map();
@@ -3302,7 +3319,7 @@ function openShipmentAddModal(){
     <h2>출하 기록 직접 입력</h2>
     <div class="kv"><div class="k">농가명</div><input id="ship-농가명" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
     <div class="kv"><div class="k">출하일</div><input id="ship-도축일" type="date" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
-    <div class="kv"><div class="k">거래처</div><input id="ship-거래처" placeholder="참푸른 / 일호 등" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
+    <div class="kv"><div class="k">거래처</div><input id="ship-거래처" placeholder="약감포크 / 동아미트 / 이서푸드 / 영천 / 신선 등" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
     <div class="kv"><div class="k">지역부장</div><select id="ship-지역부장" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">${shipmentPersonOptions('')}</select></div>
     <div class="kv"><div class="k">두수</div><input id="ship-두수" type="number" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
     <div class="kv"><div class="k">총생체중(kg)</div><input id="ship-총생체중" type="number" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
@@ -3507,46 +3524,43 @@ function supplyMonthStep(delta){
   renderSupplyMonthSection();
 }
 
+// 출하 거래처 목록 (기타 제외). 여기 추가/변경하면 계획입력·실적브레이크다운·차트 등에 함께 반영됨.
+const SHIP_COMPANY_LIST = ['약감포크','동아미트','이서푸드','영천','신선'];
+const SHIP_COMPANY_FIELD_KEY = {약감포크:'yakgam', 동아미트:'donga', 이서푸드:'iseo', 영천:'yeongcheon', 신선:'sinseon', 기타:'gita'};
+const SHIP_COMPANY_COLORS = {약감포크:'#C8102E', 동아미트:'#4A7FA8', 이서푸드:'#D97B0A', 영천:'#4C7A2E', 신선:'#8B5A8F', 기타:'#A69B8D'};
+
 function computeCompanyBreakdown(list){
-  const out = {일호:0, 참푸른:0, 기타:0};
+  const out = {}; [...SHIP_COMPANY_LIST,'기타'].forEach(c=>out[c]=0);
   list.forEach(s=>{
     const c = normalizeCompany(s.거래처);
-    if(c==='일호') out.일호 += (Number(s.두수)||0);
-    else if(c==='참푸른') out.참푸른 += (Number(s.두수)||0);
+    if(Object.prototype.hasOwnProperty.call(out,c)) out[c] += (Number(s.두수)||0);
     else out.기타 += (Number(s.두수)||0);
   });
   return out;
 }
 
 function planCompanyInputsHtml(prefix, person, plan){
-  const 일호 = plan ? (plan.계획일호||0) : 0;
-  const 참푸른 = plan ? (plan.계획참푸른||0) : 0;
-  const 기타 = plan ? (plan.계획기타||0) : 0;
-  return `<div style="display:flex;flex-direction:column;gap:3px;">
-    <div style="display:flex;align-items:center;gap:5px;"><span style="width:44px;font-size:11px;color:var(--muted);">일호식품</span><input type="number" class="${prefix}-ilho" data-person="${person}" value="${일호}" style="width:70px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 5px;font-size:12px;"></div>
-    <div style="display:flex;align-items:center;gap:5px;"><span style="width:44px;font-size:11px;color:var(--muted);">참푸른</span><input type="number" class="${prefix}-champ" data-person="${person}" value="${참푸른}" style="width:70px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 5px;font-size:12px;"></div>
-    <div style="display:flex;align-items:center;gap:5px;"><span style="width:44px;font-size:11px;color:var(--muted);">기타</span><input type="number" class="${prefix}-gita" data-person="${person}" value="${기타}" style="width:70px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 5px;font-size:12px;"></div>
-  </div>`;
+  const rows = [...SHIP_COMPANY_LIST,'기타'].map(c=>{
+    const key = SHIP_COMPANY_FIELD_KEY[c];
+    const val = plan ? (plan['계획'+c]||0) : 0;
+    return `<div style="display:flex;align-items:center;gap:5px;"><span style="width:56px;font-size:11px;color:var(--muted);">${c}</span><input type="number" class="${prefix}-${key}" data-person="${person}" value="${val}" style="width:70px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 5px;font-size:12px;"></div>`;
+  }).join('');
+  return `<div style="display:flex;flex-direction:column;gap:3px;">${rows}</div>`;
 }
 
-// 차주 예상물량 입력: 일호식품/참푸른/기타(신선,위축) 3개 항목 입력 (당주 원료돈 계획과 달리 차주 예상은 거래처별로 계속 세분화해서 받음)
+// 차주 예상물량 입력: 거래처별(약감포크/동아미트/이서푸드/영천/신선) + 기타 항목 입력 (당주 원료돈 계획과 달리 차주 예상은 거래처별로 계속 세분화해서 받음)
 function nextWeekForecastInputsHtml(prefix, person, entry){
-  const 일호 = entry ? (entry.차주예상일호||0) : 0;
-  const 참푸른 = entry ? (entry.차주예상참푸른||0) : 0;
-  const 기타 = entry ? (entry.차주예상기타||0) : 0;
-  return `<div style="display:flex;flex-direction:column;gap:3px;">
-    <div style="display:flex;align-items:center;gap:5px;"><span style="width:78px;font-size:11px;color:var(--muted);">일호식품</span><input type="number" class="${prefix}-ilho" data-person="${person}" value="${일호}" style="width:70px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 5px;font-size:12px;"></div>
-    <div style="display:flex;align-items:center;gap:5px;"><span style="width:78px;font-size:11px;color:var(--muted);">참푸른</span><input type="number" class="${prefix}-champ" data-person="${person}" value="${참푸른}" style="width:70px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 5px;font-size:12px;"></div>
-    <div style="display:flex;align-items:center;gap:5px;"><span style="width:78px;font-size:11px;color:var(--muted);">기타(신선,위축)</span><input type="number" class="${prefix}-gita" data-person="${person}" value="${기타}" style="width:70px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 5px;font-size:12px;"></div>
-  </div>`;
+  const rows = [...SHIP_COMPANY_LIST,'기타'].map(c=>{
+    const key = SHIP_COMPANY_FIELD_KEY[c];
+    const val = entry ? (entry['차주예상'+c]||0) : 0;
+    return `<div style="display:flex;align-items:center;gap:5px;"><span style="width:78px;font-size:11px;color:var(--muted);">${c}</span><input type="number" class="${prefix}-${key}" data-person="${person}" value="${val}" style="width:70px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 5px;font-size:12px;"></div>`;
+  }).join('');
+  return `<div style="display:flex;flex-direction:column;gap:3px;">${rows}</div>`;
 }
 
 function actualCompanyBreakdownHtml(breakdown){
-  return `<div class="company-breakdown" style="color:var(--muted);line-height:1.6;">
-    <div>일호식품 ${(breakdown.일호||0).toLocaleString('ko-KR')}두</div>
-    <div>참푸른 ${(breakdown.참푸른||0).toLocaleString('ko-KR')}두</div>
-    <div>기타 ${(breakdown.기타||0).toLocaleString('ko-KR')}두</div>
-  </div>`;
+  const rows = [...SHIP_COMPANY_LIST,'기타'].map(c=>`<div>${c} ${(breakdown[c]||0).toLocaleString('ko-KR')}두</div>`).join('');
+  return `<div class="company-breakdown" style="color:var(--muted);line-height:1.6;">${rows}</div>`;
 }
 
 function renderSupplyMonthSection(){
@@ -3606,14 +3620,14 @@ function renderSupplyMonthSection(){
 }
 
 async function saveTeamMonthPlan(month){
-  const ilhoEl = document.querySelector(`.mp-team-plan-ilho[data-person="${TEAM_PLAN_KEY}"]`);
-  const champEl = document.querySelector(`.mp-team-plan-champ[data-person="${TEAM_PLAN_KEY}"]`);
-  const gitaEl = document.querySelector(`.mp-team-plan-gita[data-person="${TEAM_PLAN_KEY}"]`);
+  const payload = { action:'saveMonthPlan', 연월: month, 지역부장: TEAM_PLAN_KEY };
+  [...SHIP_COMPANY_LIST,'기타'].forEach(c=>{
+    const key = SHIP_COMPANY_FIELD_KEY[c];
+    const el = document.querySelector(`.mp-team-plan-${key}[data-person="${TEAM_PLAN_KEY}"]`);
+    payload['계획'+c] = el ? (Number(el.value)||0) : 0;
+  });
   try{
-    await shipmentApiRequest({
-      action:'saveMonthPlan', 연월: month, 지역부장: TEAM_PLAN_KEY,
-      계획일호: Number(ilhoEl.value)||0, 계획참푸른: Number(champEl.value)||0, 계획기타: Number(gitaEl.value)||0,
-    });
+    await shipmentApiRequest(payload);
     await loadSupplyMonthPlansFromAPI();
     renderSupplyMonthSection();
   }catch(e){
@@ -3748,8 +3762,8 @@ function renderWeekPlanSection(){
   const nextMondayStr = nextWeek ? nextWeek.start : null;
 
   let total계획 = 0, total실적 = 0, total차주예상 = 0, total차주계획 = 0;
-  const totalBreakdown = {일호:0, 참푸른:0, 기타:0};
-  const totalNextBreakdown = {일호:0, 참푸른:0, 기타:0};
+  const totalBreakdown = {}; [...SHIP_COMPANY_LIST,'기타'].forEach(c=>totalBreakdown[c]=0);
+  const totalNextBreakdown = {}; [...SHIP_COMPANY_LIST,'기타'].forEach(c=>totalNextBreakdown[c]=0);
 
   const thisRows = [];
   const nextRows = [];
@@ -3761,16 +3775,14 @@ function renderWeekPlanSection(){
     const 차주예상두수 = thisEntry ? (Number(thisEntry.차주예상두수)||0) : 0;
     const 차주계획두수 = nextEntry ? (Number(nextEntry.계획두수)||0) : 0;
 
-    totalNextBreakdown.일호 += thisEntry ? (Number(thisEntry.차주예상일호)||0) : 0;
-    totalNextBreakdown.참푸른 += thisEntry ? (Number(thisEntry.차주예상참푸른)||0) : 0;
-    totalNextBreakdown.기타 += thisEntry ? (Number(thisEntry.차주예상기타)||0) : 0;
+    [...SHIP_COMPANY_LIST,'기타'].forEach(c=>{
+      totalNextBreakdown[c] += thisEntry ? (Number(thisEntry['차주예상'+c])||0) : 0;
+    });
 
     const weekShipments = SHIPMENTS.filter(s=> s.지역부장===person && s.도축일 >= thisMondayStr && s.도축일 <= thisSundayStr);
     const 실적두수 = weekShipments.reduce((sum,s)=>sum+(Number(s.두수)||0), 0);
     const 실적브레이크다운 = computeCompanyBreakdown(weekShipments);
-    totalBreakdown.일호 += 실적브레이크다운.일호;
-    totalBreakdown.참푸른 += 실적브레이크다운.참푸른;
-    totalBreakdown.기타 += 실적브레이크다운.기타;
+    [...SHIP_COMPANY_LIST,'기타'].forEach(c=>{ totalBreakdown[c] += 실적브레이크다운[c]; });
 
     const 과부족 = 실적두수 - 계획두수;
     const 차주과부족 = 차주예상두수 - 차주계획두수;
@@ -4037,19 +4049,19 @@ function renderShipWeekCompareSection(){
 
 async function saveWeekPlanRow(person, weekStart){
   const planEl = document.querySelector(`.wp-plan-total[data-person="${person}"]`);
-  const nextIlhoEl = document.querySelector(`.wp-next-ilho[data-person="${person}"]`);
-  const nextChampEl = document.querySelector(`.wp-next-champ[data-person="${person}"]`);
-  const nextGitaEl = document.querySelector(`.wp-next-gita[data-person="${person}"]`);
+  const payload = {
+    action:'saveWeekPlan',
+    주차시작일: weekStart,
+    지역부장: person,
+    계획두수: planEl ? (Number(planEl.value)||0) : 0,
+  };
+  [...SHIP_COMPANY_LIST,'기타'].forEach(c=>{
+    const key = SHIP_COMPANY_FIELD_KEY[c];
+    const el = document.querySelector(`.wp-next-${key}[data-person="${person}"]`);
+    payload['차주예상'+c] = el ? (Number(el.value)||0) : 0;
+  });
   try{
-    await shipmentApiRequest({
-      action:'saveWeekPlan',
-      주차시작일: weekStart,
-      지역부장: person,
-      계획두수: planEl ? (Number(planEl.value)||0) : 0,
-      차주예상일호: nextIlhoEl ? (Number(nextIlhoEl.value)||0) : 0,
-      차주예상참푸른: nextChampEl ? (Number(nextChampEl.value)||0) : 0,
-      차주예상기타: nextGitaEl ? (Number(nextGitaEl.value)||0) : 0,
-    });
+    await shipmentApiRequest(payload);
     await loadShipmentWeekPlansFromAPI();
     renderWeekPlanSection();
   }catch(e){
@@ -4063,21 +4075,26 @@ let shipCharts = {};
 // 작업장명(도축장)만 있고 거래처명이 명확하지 않은 경우를 위한 별칭 매핑.
 // 필요한 매핑이 더 있으면 여기에 추가하면 됩니다.
 const PLANT_COMPANY_ALIASES = {
-  '(유)금돈': '일호',
 };
 
 function normalizeCompany(c){
   c = c || '';
   if(PLANT_COMPANY_ALIASES[c]) return PLANT_COMPANY_ALIASES[c];
-  if(c.includes('일호')) return '일호';
-  if(c.includes('참푸른')) return '참푸른';
+  if(c.includes('약감')) return '약감포크';
+  if(c.includes('동아')) return '동아미트';
+  if(c.includes('이서')) return '이서푸드';
+  if(c.includes('영천')) return '영천';
+  if(c.includes('신선')) return '신선';
   return c || '기타';
 }
 
-// 계약조건 기반 예상 지급율(%) 계산: 참푸른(표준 77%/등외 50%), 일호(표준=지육율%/등외 50%)
-// 거래처가 참푸른/일호로 분류되지 않으면 계산하지 않고 null 반환(표에는 '미정'으로 표시)
-// 참푸른/일호 출하물량은 현재 조건에서 지급율 0.2%p를 고정 차감해서 반환한다 (요청에 따른 조정)
-const PAY_RATE_DEDUCTION_PP = 0.2;
+// 계약조건 기반 예상 지급율(%) 계산 (거래처별 계약 기준):
+//  - 동아미트: 표준 77.3% / 등외 50%
+//  - 약감포크: 표준 77.3% / 등외 55%
+//  - 이서푸드: 출하평체(총생체중/두수) 구간별 — 107kg이상 77.5%, 105~107kg미만 68%, 100~105kg미만 65%,
+//              95~100kg미만 63%, 90~95kg미만 60%, 90kg미만은 미정(null)
+//  - 영천/신선: 계약 공식 없음 — 직접입력(지급율직접)으로만 반영, 자동계산은 null
+//  - 그 외(기타 등): 자동계산하지 않고 null 반환(표에는 '미정'으로 표시)
 
 // 등판서(등급판정서) 데이터가 실제로 등록됐는지 판단: 지육율/등급분포 중 하나라도 값이 있으면 등록된 것으로 봄
 function hasGradeReport(shipment){
@@ -4098,22 +4115,36 @@ function computeGradeRate(shipment){
   return (g1p+g1)/두수*100;
 }
 
+// 이서푸드: 출하평체(kg) 구간별 지급율(%)
+function iseoTierRate(출하평체){
+  if(출하평체 >= 107) return 77.5;
+  if(출하평체 >= 105) return 68;
+  if(출하평체 >= 100) return 65;
+  if(출하평체 >= 95) return 63;
+  if(출하평체 >= 90) return 60;
+  return null;
+}
+
 function computeExpectedPayRate(shipment){
-  // 직접입력으로 지급율을 명시했으면 그 값을 그대로 사용 (자동계산/차감 없음)
+  // 직접입력으로 지급율을 명시했으면 그 값을 그대로 사용 (자동계산 없음)
   if(shipment.지급율직접!==null && shipment.지급율직접!==undefined && shipment.지급율직접!=='') return Number(shipment.지급율직접);
 
   // 등판서 미입력 개체는 거래처 상관없이 일괄 지급율 77%로 실적에 반영
   if(!hasGradeReport(shipment)) return 77;
 
   const company = normalizeCompany(shipment.거래처);
-  let standardRate;
-  if(company === '일호'){
-    const 지육율 = Number(shipment.지육율)||0;
-    if(!지육율) return null;
-    standardRate = 지육율 / 100;
+
+  if(company === '이서푸드'){
+    const 두수 = Number(shipment.두수)||0;
+    const 총생체중 = Number(shipment.총생체중)||0;
+    if(!두수 || !총생체중) return null;
+    return iseoTierRate(총생체중/두수);
   }
-  else if(company === '참푸른') standardRate = 0.77;
-  else return null;
+
+  let standardRate, 등외Rate;
+  if(company === '동아미트'){ standardRate = 0.773; 등외Rate = 0.5; }
+  else if(company === '약감포크'){ standardRate = 0.773; 등외Rate = 0.55; }
+  else return null; // 영천/신선/기타 등은 계약 공식이 없어 직접입력으로만 반영
 
   const animals = shipment.animals;
   let result;
@@ -4121,7 +4152,7 @@ function computeExpectedPayRate(shipment){
     let sumW = 0, sumRateW = 0;
     animals.forEach(a=>{
       const w = Number(a.생체중) || Number(a.도체중) || 1;
-      const rate = (String(a.최종등급||'').trim()==='등외') ? 0.5 : standardRate;
+      const rate = (String(a.최종등급||'').trim()==='등외') ? 등외Rate : standardRate;
       sumW += w; sumRateW += rate * w;
     });
     result = sumW ? (sumRateW/sumW*100) : (standardRate*100);
@@ -4131,10 +4162,10 @@ function computeExpectedPayRate(shipment){
     if(!두수) result = standardRate*100;
     else {
       const 표준두수 = 두수 - 등외두수;
-      result = ((표준두수*standardRate + 등외두수*0.5) / 두수) * 100;
+      result = ((표준두수*standardRate + 등외두수*등외Rate) / 두수) * 100;
     }
   }
-  return result - PAY_RATE_DEDUCTION_PP;
+  return result;
 }
 
 let shipCompanyMonthInit = false;
@@ -4176,7 +4207,7 @@ function renderShipmentCompanyCharts(){
 
   shipCharts.pie = new Chart(document.getElementById('chartShipCompanyPie'), {
     type:'pie',
-    data:{ labels:Object.keys(companyTotals), datasets:[{data:Object.values(companyTotals), backgroundColor:['#C8102E','#4A7FA8','#D97B0A','#A69B8D']}] },
+    data:{ labels:Object.keys(companyTotals), datasets:[{data:Object.values(companyTotals), backgroundColor:Object.keys(companyTotals).map(c=>SHIP_COMPANY_COLORS[c]||'#A69B8D')}] },
     options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
   });
 
@@ -4190,7 +4221,6 @@ function renderShipmentCompanyCharts(){
     dowCompany[d][c] = (dowCompany[d][c]||0) + (Number(s.두수)||0);
   });
   const companies = [...new Set(scoped.map(s=>normalizeCompany(s.거래처)))];
-  const colors = {'참푸른':'#C8102E','일호':'#4A7FA8'};
   const datasets = companies.map(c=>({
     label: c,
     data: dows.map(d=>{
@@ -4198,7 +4228,7 @@ function renderShipmentCompanyCharts(){
       const val = dowCompany[d][c]||0;
       return total ? Math.round(val/total*100) : 0;
     }),
-    backgroundColor: colors[c] || '#A69B8D',
+    backgroundColor: SHIP_COMPANY_COLORS[c] || '#A69B8D',
   }));
 
   shipCharts.dow = new Chart(document.getElementById('chartShipDowStack'), {
@@ -4475,18 +4505,14 @@ function renderShipmentAlerts(list){
   const scoped = selectedMonth ? list.filter(s=>(s.도축일||'').slice(0,7)===selectedMonth) : list;
   const periodLabel = selectedMonth || '전체기간';
 
-  const ilhoLow = scoped.filter(s=> normalizeCompany(s.거래처)==='일호' && (Number(s.지육율)||0) < 77);
   const dropAny = scoped.filter(s=> ((s.등급분포&&s.등급분포['등외'])||0) >= 1);
 
-  if(!ilhoLow.length && !dropAny.length){
+  if(!dropAny.length){
     box.innerHTML = alertBoxHtml(`품질 관리 알림 — 이상 없음 (${periodLabel})`, '기준 미달 농가가 없습니다.', 0, true);
     return;
   }
 
-  const alertItems = [
-    ...ilhoLow.map(s=>`<div class="alert-item"><strong>${s.농가명}</strong> (${s.도축일}, 일호) — 지육율 ${(s.지육율||0).toFixed(1)}% (기준 77% 미달)</div>`),
-    ...dropAny.map(s=>`<div class="alert-item"><strong>${s.농가명}</strong> (${s.도축일}, ${s.거래처||'-'}) — 등외 ${s.등급분포['등외']}마리 발생</div>`)
-  ];
+  const alertItems = dropAny.map(s=>`<div class="alert-item"><strong>${s.농가명}</strong> (${s.도축일}, ${s.거래처||'-'}) — 등외 ${s.등급분포['등외']}마리 발생</div>`);
   box.innerHTML = alertBoxHtml(`품질 관리 알림 (${periodLabel})`, alertItems.join(''), alertItems.length, false);
 }
 
@@ -7630,9 +7656,7 @@ async function exportReportToExcel(evt){
     // ---- 월 누적 출하실적 (회사별) ----
     const breakdown = computeCompanyBreakdown(monthShipments);
     const shipmentRows = [
-      ['일호식품', (breakdown.일호||0).toLocaleString('ko-KR')+'두'],
-      ['참푸른', (breakdown.참푸른||0).toLocaleString('ko-KR')+'두'],
-      ['기타', (breakdown.기타||0).toLocaleString('ko-KR')+'두'],
+      ...[...SHIP_COMPANY_LIST,'기타'].map(c=>[c, (breakdown[c]||0).toLocaleString('ko-KR')+'두']),
       ['팀 합계 실적', monthActual.toLocaleString('ko-KR')+'두'],
       ['팀 월 계획', monthPlanQty.toLocaleString('ko-KR')+'두'],
     ];
