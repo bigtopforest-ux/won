@@ -1038,7 +1038,7 @@ function renderCharts(){
         {label:'드랍', data:Object.keys(s.owner_dist).map(k=>s.owner_drop[k]||0), backgroundColor:'#C7BDB4'},
       ]
     },
-    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{boxWidth:10,font:{size:11}}}}, scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true}}}
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{boxWidth:10,font:{size:11}}}}, scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true,max:20,ticks:{stepSize:1,precision:0}}}}
   });
 
   const stageLabels = Object.keys(s.stage_dist);
@@ -1050,15 +1050,15 @@ function renderCharts(){
 
   charts.region = new Chart(document.getElementById('chartRegion'), {
     type:'bar',
-    data:{labels:s.region_dist.map(r=>r[0]), datasets:[{label:'대상수', data:s.region_dist.map(r=>r[1]), backgroundColor:'#C8102E'}]},
-    options:{indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true}}}
+    data:{labels:s.region_dist.map(r=>r[0]), datasets:[{label:'건수', data:s.region_dist.map(r=>r[1]), backgroundColor:'#C8102E'}]},
+    options:{indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true,max:10,ticks:{stepSize:1,precision:0}}}}
   });
 
   const months = Object.keys(s.monthly_new).sort((a,b)=>a-b);
   charts.monthly = new Chart(document.getElementById('chartMonthly'), {
-    type:'line',
-    data:{labels:months.map(m=>m+'월'), datasets:[{label:'신규 발굴 건수', data:months.map(m=>s.monthly_new[m]), borderColor:'#C8102E', backgroundColor:'#eef0f2', fill:true, tension:.3}]},
-    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}}
+    type:'bar',
+    data:{labels:months.map(m=>m+'월'), datasets:[{label:'신규 발굴 건수', data:months.map(m=>s.monthly_new[m]), backgroundColor:'#C8102E'}]},
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,max:30,ticks:{stepSize:1,precision:0}}}}
   });
 }
 
