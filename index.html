@@ -952,10 +952,12 @@ function computeSummary(farms){
   const active = farms.filter(f=>normalizeStatus(f)==='진행중').length;
   const contracted = farms.filter(f=>normalizeStatus(f)==='계약완료').length;
   const dropped = farms.filter(f=>normalizeStatus(f)==='드랍').length;
+  // 최초 등록(입력시작)일자 기준 월별 신규 발굴 건수. 서버가 생성 시점에 고정해서 내려주는 등록일시를 사용 —
+  // 수정해도 바뀌지 않으므로 실제로 언제 신규 발굴됐는지를 반영함.
   const monthly_new = {};
   farms.forEach(f=>{
-    const m = /^(\d+)월\s*(\d+)주$/.exec(f.최초등록||'');
-    if(m){ const mo = m[1]; monthly_new[mo] = (monthly_new[mo]||0)+1; }
+    const d = f.등록일시 ? new Date(f.등록일시) : null;
+    if(d && !isNaN(d)){ const mo = String(d.getMonth()+1); monthly_new[mo] = (monthly_new[mo]||0)+1; }
   });
   const stage_dist = {};
   farms.filter(f=>normalizeStatus(f)==='진행중').forEach(f=>{

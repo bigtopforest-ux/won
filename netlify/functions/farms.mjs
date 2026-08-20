@@ -57,8 +57,10 @@ function migrate(data) {
   let changed = false;
   const out = data.map((f) => {
     const status = normalizeStatus(f);
-    if (f.상태 !== status || f.드랍여부 !== (status === "드랍")) changed = true;
-    return { ...f, 상태: status, 드랍여부: status === "드랍" };
+    // 등록일시(입력시작일자)가 없는 기존 레코드는 최근수정시각으로 대신 채워서 월별 신규 발굴 집계가 빠지지 않도록 함
+    const 등록일시 = f.등록일시 || f.최근수정시각 || new Date().toISOString();
+    if (f.상태 !== status || f.드랍여부 !== (status === "드랍") || f.등록일시 !== 등록일시) changed = true;
+    return { ...f, 상태: status, 드랍여부: status === "드랍", 등록일시 };
   });
   return { out, changed };
 }
@@ -139,6 +141,7 @@ export default async (req, context) => {
       newFarm.stage_bucket = classifyStage(newFarm.접촉단계, newFarm.상태);
       newFarm.최근수정자 = editor || "";
       newFarm.최근수정시각 = new Date().toISOString();
+      newFarm.등록일시 = newFarm.최근수정시각;
       newFarm.최근업데이트 = kstMonthDayStr();
       data.push(newFarm);
       await s.setJSON(KEY, data);
