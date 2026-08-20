@@ -7757,28 +7757,30 @@ function buildFarmsWorkbook(XS, farms){
     return (Number(b.가능성)||0) - (Number(a.가능성)||0);
   });
 
+  const NOTE_COLS = new Set([7, 9, 10]); // 접촉단계·니즈메모·차주액션 — 자유서술이라 여러 줄일 수 있는 컬럼
   let totalScale = 0;
   sorted.forEach((f, ri)=>{
     const alt = ri % 2 === 1;
     const status = normalizeStatus(f);
+    const stageInfo = cleanNotes(f.접촉단계);
     const nizInfo = cleanNotes(f.사양가니즈);
     const actionInfo = cleanNotes(f.차주액션);
     const row = [
       f.담당자||'-', f.농가명||'-', f.농장주||'-', f.지역||'-',
-      f.규모||'-', fmtProb(f.가능성), f.거래가능일자||'-', f.접촉단계||'-',
+      f.규모||'-', fmtProb(f.가능성), f.거래가능일자||'-', stageInfo.text || '-',
       status, nizInfo.text || '-', actionInfo.text || '-',
     ];
     totalScale += Number(f.규모)||0;
     row.forEach((v,c)=>{
-      const isNote = c===9||c===10;
+      const isNote = NOTE_COLS.has(c);
       put(r, c, v, {
         font:{sz:10.5, color:{rgb:'333333'}, bold: c===0||c===1},
         fill:{fgColor:{rgb: alt?REPORT_XLSX_COLORS.altRow:'FFFFFF'}},
         border: reportXlsxBorder(),
-        alignment:{vertical: isNote?'top':'center', horizontal: isNote?'left':'center', indent:isNote?1:0, wrapText:isNote},
+        alignment:{vertical:'top', horizontal: isNote?'left':'center', indent:isNote?1:0, wrapText:isNote},
       });
     });
-    const lineCount = Math.max(1, nizInfo.lines, actionInfo.lines);
+    const lineCount = Math.max(1, stageInfo.lines, nizInfo.lines, actionInfo.lines);
     ws['!rows'][r] = { hpt: Math.min(14*lineCount + 8, 110) };
     r++;
   });
@@ -7800,7 +7802,7 @@ function buildFarmsWorkbook(XS, farms){
 
   ws['!ref'] = XS.utils.encode_range({s:{r:0,c:0}, e:{r:r, c:NCOLS-1}});
   ws['!merges'] = merges;
-  ws['!cols'] = [ {wch:10}, {wch:18}, {wch:10}, {wch:10}, {wch:10}, {wch:9}, {wch:12}, {wch:14}, {wch:9}, {wch:42}, {wch:42} ];
+  ws['!cols'] = [ {wch:10}, {wch:18}, {wch:10}, {wch:10}, {wch:10}, {wch:9}, {wch:12}, {wch:26}, {wch:9}, {wch:42}, {wch:42} ];
   return ws;
 }
 
