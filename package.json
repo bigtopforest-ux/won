@@ -1,0 +1,9 @@
+{
+  "name": "4team-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "4팀 종합관리 대시보드",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}
