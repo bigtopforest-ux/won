@@ -2138,12 +2138,17 @@ function renderMedWeekStockCard(){
   const weeks = getClosingCycleWeeks(medStockMonth);
   const rate = MED_STOCK_RATE || 0;
 
-  function cardHtml(w){
+  const weekData = weeks.map(w=>{
     const entry = MED_WEEK_STOCK.find(e=>e.주차시작일===w.start);
     const 입식두수 = entry ? (Number(entry.입식두수)||0) : 0;
     const 사용한도 = Math.round(입식두수 * rate);
     const 사용금액 = MEDICINE.filter(r=>!isExcludedRow(r) && r.납품일자 >= w.start && r.납품일자 <= w.end)
       .reduce((s,r)=>s+(Number(r.납품금액)||0), 0);
+    return { w, 입식두수, 사용한도, 사용금액 };
+  });
+
+  function cardHtml(d){
+    const { w, 입식두수, 사용한도, 사용금액 } = d;
     const pct = 사용한도 ? Math.round(사용금액/사용한도*100) : 0;
     const cls = pctClass(pct);
     return `<div class="budget-card">
@@ -2160,7 +2165,21 @@ function renderMedWeekStockCard(){
     </div>`;
   }
 
-  const cardsHtml = weeks.map(cardHtml).join('');
+  const totalStock = weekData.reduce((s,d)=>s+d.입식두수, 0);
+  const totalLimit = weekData.reduce((s,d)=>s+d.사용한도, 0);
+  const totalUsed = weekData.reduce((s,d)=>s+d.사용금액, 0);
+  const totalPct = totalLimit ? Math.round(totalUsed/totalLimit*100) : 0;
+  const totalClsAll = pctClass(totalPct);
+  const totalCardHtml = `<div class="budget-card total">
+    <h4>마감월 합산</h4>
+    <div class="amt">입식두수 <b>${totalStock.toLocaleString('ko-KR')}두</b></div>
+    <div class="amt">사용한도 <b>${fmtWon(totalLimit)}</b></div>
+    <div class="amt">사용금액 <b>${fmtWon(totalUsed)}</b></div>
+    <div class="progress-track"><div class="progress-fill ${totalClsAll}" style="width:${Math.min(totalPct,100)}%"></div></div>
+    <div class="progress-pct">${totalLimit ? totalPct+'% 집행 · 잔여 '+fmtWon(totalLimit-totalUsed) : '입식두수·예산을 입력하면 한도가 계산돼요'}</div>
+  </div>`;
+
+  const cardsHtml = weekData.map(cardHtml).join('') + totalCardHtml;
 
   box.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
