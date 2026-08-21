@@ -418,8 +418,8 @@
   </div>
 
   <div class="charts">
-    <div class="chart-card"><h3>담당자별 약품비</h3><div class="count-tag" id="chartMedOwnerStat"></div><canvas id="chartMedOwner"></canvas></div>
     <div class="chart-card"><h3>주차별 입식두수 · 약품비 한도</h3><div id="med-week-stock-box"></div></div>
+    <div class="chart-card"><h3>담당자별 약품비</h3><div class="count-tag" id="chartMedOwnerStat"></div><canvas id="chartMedOwner"></canvas></div>
     <div class="chart-card"><h3>약품 구분별 비중</h3><div class="count-tag" id="chartMedCategoryStat"></div><canvas id="chartMedCategory"></canvas></div>
     <div class="chart-card"><h3>농가별 TOP 10</h3><div class="count-tag" id="chartMedFarmStat"></div><canvas id="chartMedFarm"></canvas></div>
     <div class="chart-card"><h3>월별 약품비 추이</h3><div class="count-tag" id="chartMedMonthlyStat"></div><canvas id="chartMedMonthly"></canvas></div>
@@ -2112,10 +2112,10 @@ function renderMedWeekStockCard(){
   if(!box) return;
   if(!medStockMonth) medStockMonth = localDateStr(new Date()).slice(0,7);
   const [y,m] = medStockMonth.split('-').map(Number);
-  const weeks = getMonthBoundedWeeks(y, m-1);
+  const weeks = getMonthBoundedWeeks(y, m-1).slice(0,4); // 너무 길어지지 않게 한 달 최대 4주까지만 표시
   const rate = MED_STOCK_RATE || 0;
 
-  const cards = weeks.map(w=>{
+  function cardHtml(w){
     const entry = MED_WEEK_STOCK.find(e=>e.주차시작일===w.start);
     const 입식두수 = entry ? (Number(entry.입식두수)||0) : 0;
     const 사용한도 = Math.round(입식두수 * rate);
@@ -2135,7 +2135,12 @@ function renderMedWeekStockCard(){
       <div class="progress-track"><div class="progress-fill ${cls}" style="width:${Math.min(pct,100)}%"></div></div>
       <div class="progress-pct">${사용한도 ? pct+'% 집행 · 잔여 '+fmtWon(사용한도-사용금액) : '입식두수·예산을 입력하면 한도가 계산돼요'}</div>
     </div>`;
-  }).join('');
+  }
+
+  // 2칸으로 나눠 왼쪽 칸에 1~2주차, 오른쪽 칸에 3~4주차가 각각 세로로 쌓이도록 배치 (세로로 너무 길어지는 것 방지)
+  const half = Math.ceil(weeks.length/2);
+  const col1 = weeks.slice(0, half).map(cardHtml).join('');
+  const col2 = weeks.slice(half).map(cardHtml).join('');
 
   box.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
@@ -2147,7 +2152,10 @@ function renderMedWeekStockCard(){
       <button class="tab-btn active" onclick="saveMedStockRate()">저장</button>
       <span class="upload-status" id="med-stock-status"></span>
     </div>
-    <div class="budget-row">${cards}</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
+      <div style="display:flex;flex-direction:column;gap:14px;">${col1}</div>
+      <div style="display:flex;flex-direction:column;gap:14px;">${col2}</div>
+    </div>
   `;
 }
 
