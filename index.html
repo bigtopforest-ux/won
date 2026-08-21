@@ -411,6 +411,9 @@
     <div style="margin-top:8px;"><button class="tab-btn active" onclick="saveExcludedItems()">제외 품목 저장</button> <span class="upload-status" id="excluded-item-status"></span></div>
   </div>
 
+  <div class="section-title">주차별 입식두수 · 약품비 한도</div>
+  <div id="med-week-stock-box"></div>
+
   <div class="month-select-row">
     <button class="tab-btn active" id="medModeCumBtn" onclick="setMedChartMode('cumulative')">누적</button>
     <button class="tab-btn" id="medModeMonthBtn" onclick="setMedChartMode('monthly')">월별</button>
@@ -418,7 +421,6 @@
   </div>
 
   <div class="charts">
-    <div class="chart-card"><h3>주차별 입식두수 · 약품비 한도</h3><div id="med-week-stock-box"></div></div>
     <div class="chart-card"><h3>담당자별 약품비</h3><div class="count-tag" id="chartMedOwnerStat"></div><canvas id="chartMedOwner"></canvas></div>
     <div class="chart-card"><h3>약품 구분별 비중</h3><div class="count-tag" id="chartMedCategoryStat"></div><canvas id="chartMedCategory"></canvas></div>
     <div class="chart-card"><h3>농가별 TOP 10</h3><div class="count-tag" id="chartMedFarmStat"></div><canvas id="chartMedFarm"></canvas></div>
@@ -2105,14 +2107,14 @@ async function saveLimit(groupName){
   }
 }
 
-// ---- 주차별 입식두수 · 약품비 한도 (담당자별 약품비 카드 옆) ----
+// ---- 주차별 입식두수 · 약품비 한도 (전체 폭을 써서 주차 순서대로 한 줄로 나열) ----
 // 사용한도 = 그 주 입식두수 × 입식두수 예산(원/두). 사용금액은 그 주(납품일자 기준)에 실제 집행된 약품비 합계.
 function renderMedWeekStockCard(){
   const box = document.getElementById('med-week-stock-box');
   if(!box) return;
   if(!medStockMonth) medStockMonth = localDateStr(new Date()).slice(0,7);
   const [y,m] = medStockMonth.split('-').map(Number);
-  const weeks = getMonthBoundedWeeks(y, m-1).slice(0,4); // 너무 길어지지 않게 한 달 최대 4주까지만 표시
+  const weeks = getMonthBoundedWeeks(y, m-1);
   const rate = MED_STOCK_RATE || 0;
 
   function cardHtml(w){
@@ -2137,10 +2139,7 @@ function renderMedWeekStockCard(){
     </div>`;
   }
 
-  // 2칸으로 나눠 왼쪽 칸에 1~2주차, 오른쪽 칸에 3~4주차가 각각 세로로 쌓이도록 배치 (세로로 너무 길어지는 것 방지)
-  const half = Math.ceil(weeks.length/2);
-  const col1 = weeks.slice(0, half).map(cardHtml).join('');
-  const col2 = weeks.slice(half).map(cardHtml).join('');
+  const cardsHtml = weeks.map(cardHtml).join('');
 
   box.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
@@ -2152,10 +2151,7 @@ function renderMedWeekStockCard(){
       <button class="tab-btn active" onclick="saveMedStockRate()">저장</button>
       <span class="upload-status" id="med-stock-status"></span>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
-      <div style="display:flex;flex-direction:column;gap:14px;">${col1}</div>
-      <div style="display:flex;flex-direction:column;gap:14px;">${col2}</div>
-    </div>
+    <div class="budget-row">${cardsHtml}</div>
   `;
 }
 
