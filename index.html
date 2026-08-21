@@ -2107,14 +2107,35 @@ async function saveLimit(groupName){
   }
 }
 
-// ---- 주차별 입식두수 · 약품비 한도 (전체 폭을 써서 주차 순서대로 한 줄로 나열) ----
+// 마감월(전월21일~당월20일) 구간을 달력월 경계에 걸치더라도 끊지 않고 순수 7일 단위로 나눠 주차를 만듦.
+// (달력월 기준으로 나누면 월이 바뀌는 지점에서 한 주가 둘로 쪼개지는 문제가 있어 마감 구간 기준으로 통일)
+function getClosingCycleWeeks(closingMonth){
+  const range = medCycleRange(closingMonth);
+  if(!range) return [];
+  const weeks = [];
+  let cursor = new Date(range.start);
+  const endDate = new Date(range.end);
+  let weekNum = 1;
+  while(cursor <= endDate){
+    let weekEnd = new Date(cursor); weekEnd.setDate(weekEnd.getDate()+6);
+    if(weekEnd > endDate) weekEnd = new Date(endDate);
+    const startStr = fmtDateYMD(cursor);
+    const endStr = fmtDateYMD(weekEnd);
+    weeks.push({ start:startStr, end:endStr, weekNum, label:`${weekNum}주 (${startStr.slice(5)}~${endStr.slice(5)})` });
+    cursor = new Date(weekEnd); cursor.setDate(cursor.getDate()+1);
+    weekNum++;
+  }
+  return weeks;
+}
+
+// ---- 주차별 입식두수 · 약품비 한도 (전체 폭을 써서 마감월 기준 주차 순서대로 한 줄로 나열) ----
 // 사용한도 = 그 주 입식두수 × 입식두수 예산(원/두). 사용금액은 그 주(납품일자 기준)에 실제 집행된 약품비 합계.
 function renderMedWeekStockCard(){
   const box = document.getElementById('med-week-stock-box');
   if(!box) return;
-  if(!medStockMonth) medStockMonth = localDateStr(new Date()).slice(0,7);
-  const [y,m] = medStockMonth.split('-').map(Number);
-  const weeks = getMonthBoundedWeeks(y, m-1);
+  if(!medStockMonth) medStockMonth = selectedBudgetMonth || localDateStr(new Date()).slice(0,7);
+  const range = medCycleRange(medStockMonth);
+  const weeks = getClosingCycleWeeks(medStockMonth);
   const rate = MED_STOCK_RATE || 0;
 
   function cardHtml(w){
@@ -2144,7 +2165,7 @@ function renderMedWeekStockCard(){
   box.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
       <button class="tab-btn" onclick="medStockMonthStep(-1)">◀</button>
-      <span style="font-size:13px;font-weight:600;">${medStockMonth}</span>
+      <span style="font-size:13px;font-weight:600;">마감월 ${medStockMonth}${range?' ('+range.start.slice(5)+'~'+range.end.slice(5)+')':''}</span>
       <button class="tab-btn" onclick="medStockMonthStep(1)">▶</button>
       <span style="font-size:12px;color:var(--muted);margin-left:6px;">입식두수 예산(원/두)</span>
       <input type="number" id="med-stock-rate-input" value="${rate}" style="width:90px;border:1px solid #e2e8e4;border-radius:6px;padding:4px 6px;font-size:12px;">
