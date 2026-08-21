@@ -3,6 +3,8 @@ import { getStore } from "@netlify/blobs";
 const STORE_NAME = "medicine-costs";
 const TX_KEY = "records";
 const BUDGET_KEY = "budgets";
+const WEEKSTOCK_KEY = "weekstock";
+const RATE_KEY = "stockrate";
 
 function store() {
   return getStore({ name: STORE_NAME, consistency: "strong" });
@@ -32,12 +34,27 @@ async function loadBudgets(s) {
   return data || [];
 }
 
+async function loadWeekStock(s) {
+  const data = await s.get(WEEKSTOCK_KEY, { type: "json" });
+  return data || [];
+}
+
+async function loadStockRate(s) {
+  const data = await s.get(RATE_KEY, { type: "json" });
+  return (data && Number(data.입식두수예산)) || 0;
+}
+
 export default async (req, context) => {
   const s = store();
 
   if (req.method === "GET") {
-    const [transactions, budgets] = await Promise.all([loadRecords(s), loadBudgets(s)]);
-    return json({ transactions, budgets });
+    const [transactions, budgets, weekStock, 입식두수예산] = await Promise.all([
+      loadRecords(s),
+      loadBudgets(s),
+      loadWeekStock(s),
+      loadStockRate(s),
+    ]);
+    return json({ transactions, budgets, weekStock, 입식두수예산 });
   }
 
   if (req.method === "POST") {
@@ -48,6 +65,32 @@ export default async (req, context) => {
       body = await req.json();
     } catch {
       return json({ error: "invalid json body" }, 400);
+    }
+
+    const { action } = body;
+
+    if (action === "saveWeekStock") {
+      const { 주차시작일, 입식두수, editor } = body;
+      if (!주차시작일) return json({ error: "주차시작일 required" }, 400);
+      const weeks = await loadWeekStock(s);
+      const idx = weeks.findIndex((w) => w.주차시작일 === 주차시작일);
+      const entry = {
+        주차시작일,
+        입식두수: Number(입식두수) || 0,
+        수정자: editor || "",
+        수정시각: new Date().toISOString(),
+      };
+      if (idx > -1) weeks[idx] = { ...weeks[idx], ...entry };
+      else weeks.push(entry);
+      await s.setJSON(WEEKSTOCK_KEY, weeks);
+      return json({ ok: true, entry });
+    }
+
+    if (action === "saveStockRate") {
+      const { 입식두수예산, editor } = body;
+      const rate = Number(입식두수예산) || 0;
+      await s.setJSON(RATE_KEY, { 입식두수예산: rate, 수정자: editor || "", 수정시각: new Date().toISOString() });
+      return json({ ok: true, 입식두수예산: rate });
     }
 
     const { month, rows, budgetGroups, editor } = body;

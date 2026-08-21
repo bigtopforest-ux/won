@@ -419,6 +419,7 @@
 
   <div class="charts">
     <div class="chart-card"><h3>담당자별 약품비</h3><div class="count-tag" id="chartMedOwnerStat"></div><canvas id="chartMedOwner"></canvas></div>
+    <div class="chart-card"><h3>주차별 입식두수 · 약품비 한도</h3><div id="med-week-stock-box"></div></div>
     <div class="chart-card"><h3>약품 구분별 비중</h3><div class="count-tag" id="chartMedCategoryStat"></div><canvas id="chartMedCategory"></canvas></div>
     <div class="chart-card"><h3>농가별 TOP 10</h3><div class="count-tag" id="chartMedFarmStat"></div><canvas id="chartMedFarm"></canvas></div>
     <div class="chart-card"><h3>월별 약품비 추이</h3><div class="count-tag" id="chartMedMonthlyStat"></div><canvas id="chartMedMonthly"></canvas></div>
@@ -1454,11 +1455,14 @@ async function deleteFarmImage(id, key){
 // ==================== 약품비 관리 ====================
 let MEDICINE = [];
 let MED_BUDGETS = [];
+let MED_WEEK_STOCK = [];
+let MED_STOCK_RATE = 0;
 let medicineLoaded = false;
 let medCharts = {};
 let selectedBudgetMonth = '';
 let medChartMode = 'cumulative';
 let medChartMonth = '';
+let medStockMonth = '';
 
 function setMedChartMode(mode){
   medChartMode = mode;
@@ -1622,9 +1626,24 @@ async function loadMedicineFromAPI(){
       const data = await res.json();
       MEDICINE = data.transactions || [];
       MED_BUDGETS = data.budgets || [];
+      MED_WEEK_STOCK = data.weekStock || [];
+      MED_STOCK_RATE = Number(data.입식두수예산)||0;
       medicineLoaded = true;
     }
   }catch(e){ console.warn('약품비 데이터 로드 실패', e); }
+}
+
+async function medicineApiRequest(body){
+  const res = await fetch('/api/medicine', {
+    method:'POST',
+    headers:{'content-type':'application/json','x-team-key':TEAM_KEY},
+    body: JSON.stringify(body),
+  });
+  if(!res.ok){
+    const err = await res.json().catch(()=>({error:'unknown error'}));
+    throw new Error(err.error || ('요청 실패 ('+res.status+')'));
+  }
+  return res.json();
 }
 
 function fmtWon(n){
@@ -2086,6 +2105,86 @@ async function saveLimit(groupName){
   }
 }
 
+// ---- 주차별 입식두수 · 약품비 한도 (담당자별 약품비 카드 옆) ----
+// 사용한도 = 그 주 입식두수 × 입식두수 예산(원/두). 사용금액은 그 주(납품일자 기준)에 실제 집행된 약품비 합계.
+function renderMedWeekStockCard(){
+  const box = document.getElementById('med-week-stock-box');
+  if(!box) return;
+  if(!medStockMonth) medStockMonth = localDateStr(new Date()).slice(0,7);
+  const [y,m] = medStockMonth.split('-').map(Number);
+  const weeks = getMonthBoundedWeeks(y, m-1);
+  const rate = MED_STOCK_RATE || 0;
+
+  const cards = weeks.map(w=>{
+    const entry = MED_WEEK_STOCK.find(e=>e.주차시작일===w.start);
+    const 입식두수 = entry ? (Number(entry.입식두수)||0) : 0;
+    const 사용한도 = Math.round(입식두수 * rate);
+    const 사용금액 = MEDICINE.filter(r=>!isExcludedRow(r) && r.납품일자 >= w.start && r.납품일자 <= w.end)
+      .reduce((s,r)=>s+(Number(r.납품금액)||0), 0);
+    const pct = 사용한도 ? Math.round(사용금액/사용한도*100) : 0;
+    const cls = pctClass(pct);
+    return `<div class="budget-card">
+      <h4>${w.label}</h4>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+        <span style="font-size:12px;color:var(--muted);">입식두수</span>
+        <input type="number" class="mws-input" data-week="${w.start}" value="${입식두수}" style="width:80px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 6px;font-size:12px;">
+        <button class="tab-btn active" style="padding:4px 10px;font-size:11px;" onclick="saveMedWeekStock('${w.start}')">저장</button>
+      </div>
+      <div class="amt">사용한도 <b>${fmtWon(사용한도)}</b></div>
+      <div class="amt">사용금액 <b>${fmtWon(사용금액)}</b></div>
+      <div class="progress-track"><div class="progress-fill ${cls}" style="width:${Math.min(pct,100)}%"></div></div>
+      <div class="progress-pct">${사용한도 ? pct+'% 집행 · 잔여 '+fmtWon(사용한도-사용금액) : '입식두수·예산을 입력하면 한도가 계산돼요'}</div>
+    </div>`;
+  }).join('');
+
+  box.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <button class="tab-btn" onclick="medStockMonthStep(-1)">◀</button>
+      <span style="font-size:13px;font-weight:600;">${medStockMonth}</span>
+      <button class="tab-btn" onclick="medStockMonthStep(1)">▶</button>
+      <span style="font-size:12px;color:var(--muted);margin-left:6px;">입식두수 예산(원/두)</span>
+      <input type="number" id="med-stock-rate-input" value="${rate}" style="width:90px;border:1px solid #e2e8e4;border-radius:6px;padding:4px 6px;font-size:12px;">
+      <button class="tab-btn active" onclick="saveMedStockRate()">저장</button>
+      <span class="upload-status" id="med-stock-status"></span>
+    </div>
+    <div class="budget-row">${cards}</div>
+  `;
+}
+
+function medStockMonthStep(delta){
+  const base = medStockMonth || localDateStr(new Date()).slice(0,7);
+  const [y,m] = base.split('-').map(Number);
+  const d = new Date(y, m-1+delta, 1);
+  medStockMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  renderMedWeekStockCard();
+}
+
+async function saveMedWeekStock(weekStart){
+  const el = document.querySelector(`.mws-input[data-week="${weekStart}"]`);
+  try{
+    const result = await medicineApiRequest({ action:'saveWeekStock', 주차시작일: weekStart, 입식두수: el ? (Number(el.value)||0) : 0 });
+    const idx = MED_WEEK_STOCK.findIndex(w=>w.주차시작일===weekStart);
+    if(idx>-1) MED_WEEK_STOCK[idx] = result.entry; else MED_WEEK_STOCK.push(result.entry);
+    renderMedWeekStockCard();
+  }catch(e){
+    alert('저장 실패: ' + e.message);
+  }
+}
+
+async function saveMedStockRate(){
+  const el = document.getElementById('med-stock-rate-input');
+  const statusEl = document.getElementById('med-stock-status');
+  try{
+    const rate = el ? (Number(el.value)||0) : 0;
+    await medicineApiRequest({ action:'saveStockRate', 입식두수예산: rate });
+    MED_STOCK_RATE = rate;
+    if(statusEl) statusEl.textContent = '저장됨';
+    renderMedWeekStockCard();
+  }catch(e){
+    if(statusEl) statusEl.textContent = '오류: ' + e.message;
+  }
+}
+
 function renderMedicineCharts(){
   const isMonthly = medChartMode === 'monthly';
   const filterMonth = isMonthly ? medChartMonth : null;
@@ -2278,6 +2377,7 @@ function renderMedicineAll(){
     medChartMonth = monthSel.value;
   }
   renderMedicineCharts();
+  renderMedWeekStockCard();
   renderCompareSection();
   renderMedicineFilters();
   renderMedicineTable();
