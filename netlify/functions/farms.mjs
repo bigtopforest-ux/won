@@ -121,6 +121,7 @@ export default async (req, context) => {
         지역: "",
         규모: "",
         돈사형태: "",
+        현재거래처: "",
         접촉단계: "",
         사양가니즈: "",
         대여금유무: "",
@@ -134,6 +135,7 @@ export default async (req, context) => {
         상태: "진행중",
         드랍여부: false,
         이력: [],
+        미팅이력: [],
         ...updates,
       };
       newFarm.상태 = normalizeStatus(newFarm);

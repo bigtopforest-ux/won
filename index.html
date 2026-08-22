@@ -1188,7 +1188,7 @@ document.getElementById('search').addEventListener('input', renderTable);
 ['filterOwner','filterRegion','filterStage','farmsPageSize'].forEach(id=>document.getElementById(id).addEventListener('change', renderTable));
 
 const FIELD_LABELS = {
-  담당자:'담당자', 농장주:'농장주', 지역:'지역', 규모:'규모', 돈사형태:'돈사형태', 접촉단계:'접촉단계',
+  담당자:'담당자', 농장주:'농장주', 지역:'지역', 규모:'규모', 돈사형태:'돈사형태', 현재거래처:'현재 거래처', 접촉단계:'접촉단계',
   가능성:'가능성(%)', 거래가능일자:'거래가능일자', 등급:'등급', 대여금유무:'대여금', 사양가니즈:'니즈/메모', 차주액션:'차주 액션',
 };
 
@@ -1200,6 +1200,57 @@ function openModal(id){
 function closeModal(){ document.getElementById('modal-overlay').style.display = 'none'; }
 document.getElementById('modal-overlay').addEventListener('click', e=>{ if(e.target.id==='modal-overlay') closeModal(); });
 
+// ---- 차수별 미팅사항 (날짜 있는 진행상황 로그, 계속 추가되는 형태) ----
+function meetingLogEntriesDesc(f){
+  const list = Array.isArray(f.미팅이력) ? f.미팅이력 : [];
+  return list.map((m,i)=>({...m, no:i+1})).slice().reverse();
+}
+
+function meetingLogListHtml(f){
+  const entries = meetingLogEntriesDesc(f);
+  if(!entries.length) return '';
+  const rows = entries.map(m=>`<div class="hist-item"><span class="hm">${m.no}차 · ${m.날짜||'-'}</span><br>${(m.내용||'-').toString().replace(/\n/g,'<br>')}</div>`).join('');
+  return `<div class="kv"><div class="k">차수별 미팅사항</div><div>${rows}</div></div>`;
+}
+
+function meetingLogEditHtml(f){
+  const entries = meetingLogEntriesDesc(f);
+  const rows = entries.map(m=>`<div class="hist-item"><span class="hm">${m.no}차 · ${m.날짜||'-'}</span><br>${(m.내용||'-').toString().replace(/\n/g,'<br>')}</div>`).join('');
+  return `<div class="kv"><div class="k">차수별 미팅사항</div><div>
+    ${rows || '<div style="font-size:12.5px;color:var(--muted);">등록된 미팅 이력이 없습니다</div>'}
+    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:flex-start;">
+      <input type="date" id="meeting-log-date" value="${localDateStr(new Date())}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">
+      <textarea id="meeting-log-text" rows="2" placeholder="이번 차수 진행사항을 입력하세요" style="flex:1;min-width:160px;border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;"></textarea>
+      <button type="button" class="tab-btn active" onclick="addMeetingLog(${f.id})">+ 추가</button>
+    </div>
+    <span class="upload-status" id="meeting-log-status"></span>
+  </div></div>`;
+}
+
+async function addMeetingLog(id){
+  const dateEl = document.getElementById('meeting-log-date');
+  const textEl = document.getElementById('meeting-log-text');
+  const statusEl = document.getElementById('meeting-log-status');
+  const 날짜 = dateEl ? dateEl.value : '';
+  const 내용 = textEl ? textEl.value.trim() : '';
+  if(!날짜 || !내용){
+    if(statusEl) statusEl.textContent = '날짜와 내용을 모두 입력해주세요';
+    return;
+  }
+  const f = FARMS.find(x=>x.id===id);
+  if(!f) return;
+  const history = (Array.isArray(f.미팅이력) ? f.미팅이력.slice() : []);
+  history.push({ 날짜, 내용 });
+  try{
+    const saved = await apiRequest('PUT', { id, updates: { 미팅이력: history } });
+    const idx = FARMS.findIndex(x=>x.id===id);
+    if(idx>-1) FARMS[idx] = saved;
+    renderModalEdit(id);
+  }catch(e){
+    if(statusEl) statusEl.textContent = '추가 실패: ' + e.message;
+  }
+}
+
 function renderModalView(f){
   const modal = document.getElementById('modal');
   modal.innerHTML = `
@@ -1209,12 +1260,14 @@ function renderModalView(f){
     <div class="kv"><div class="k">농장주</div><div>${f.농장주||'-'}</div></div>
     <div class="kv"><div class="k">규모</div><div>${f.규모||'-'}</div></div>
     <div class="kv"><div class="k">돈사형태</div><div>${f.돈사형태||'-'}</div></div>
+    <div class="kv"><div class="k">현재 거래처</div><div>${f.현재거래처||'-'}</div></div>
     <div class="kv"><div class="k">접촉단계</div><div>${f.접촉단계||'-'}</div></div>
     <div class="kv"><div class="k">가능성</div><div>${fmtProb(f.가능성)}</div></div>
     <div class="kv"><div class="k">거래가능일자</div><div>${f.거래가능일자||'-'}</div></div>
     <div class="kv"><div class="k">등급</div><div>${f.등급||'-'}</div></div>
     <div class="kv"><div class="k">대여금</div><div>${f.대여금유무||'-'}</div></div>
     <div class="kv"><div class="k">니즈/메모</div><div>${(f.사양가니즈||'-').replace(/\n/g,'<br>')}</div></div>
+    ${meetingLogListHtml(f)}
     <div class="kv"><div class="k">차주 액션</div><div>${(f.차주액션||'-').replace(/\n/g,'<br>')}</div></div>
     <div class="kv"><div class="k">최초등록</div><div>${f.최초등록}</div></div>
     <div class="kv"><div class="k">최근업데이트</div><div>${f.최근업데이트}</div></div>
@@ -1231,16 +1284,8 @@ function renderModalView(f){
   `;
 }
 
-function renderModalEdit(id){
-  const f = FARMS.find(x=>x.id===id);
-  const modal = document.getElementById('modal');
-  const fields = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','접촉단계','가능성','등급','대여금유무','사양가니즈','차주액션'];
-  modal.innerHTML = `
-    <button class="close-btn" onclick="closeModal()">&times;</button>
-    <h2>${f.농가명 || '(이름 없음)'} 수정</h2>
-    <div class="sub">저장하면 팀원 전체에게 즉시 반영됩니다</div>
-    <div class="kv"><div class="k">농가명</div><input id="edit-농가명" value="${(f.농가명||'').replace(/"/g,'&quot;')}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
-    ${fields.map(k=>`
+function editFieldRowHtml(f, k){
+  return `
       <div class="kv"><div class="k">${FIELD_LABELS[k]}</div>
       ${k==='접촉단계'||k==='사양가니즈'||k==='차주액션'
         ? `<textarea id="edit-${k}" rows="2" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;">${(f[k]||'').toString()}</textarea>`
@@ -1248,7 +1293,22 @@ function renderModalEdit(id){
           ? `<input id="edit-가능성" type="number" min="0" max="100" step="1" placeholder="0~100" value="${f.가능성===null||f.가능성===undefined||f.가능성===''?'':Math.round(Number(f.가능성)*100)}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">`
           : `<input id="edit-${k}" value="${(f[k]===null||f[k]===undefined?'':f[k]).toString().replace(/"/g,'&quot;')}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">`
       }</div>
-    `).join('')}
+    `;
+}
+
+function renderModalEdit(id){
+  const f = FARMS.find(x=>x.id===id);
+  const modal = document.getElementById('modal');
+  const fieldsA = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','현재거래처','접촉단계','가능성','등급','대여금유무','사양가니즈'];
+  const fieldsB = ['차주액션'];
+  modal.innerHTML = `
+    <button class="close-btn" onclick="closeModal()">&times;</button>
+    <h2>${f.농가명 || '(이름 없음)'} 수정</h2>
+    <div class="sub">저장하면 팀원 전체에게 즉시 반영됩니다</div>
+    <div class="kv"><div class="k">농가명</div><input id="edit-농가명" value="${(f.농가명||'').replace(/"/g,'&quot;')}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
+    ${fieldsA.map(k=>editFieldRowHtml(f,k)).join('')}
+    ${meetingLogEditHtml(f)}
+    ${fieldsB.map(k=>editFieldRowHtml(f,k)).join('')}
     <div class="kv"><div class="k">상태</div><select id="edit-상태" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">
       <option value="진행중" ${normalizeStatus(f)==='진행중'?'selected':''}>진행중</option>
       <option value="계약완료" ${normalizeStatus(f)==='계약완료'?'selected':''}>계약완료</option>
@@ -1272,7 +1332,7 @@ function renderModalEdit(id){
 
 async function saveEdit(id){
   const updates = { 농가명: document.getElementById('edit-농가명').value };
-  ['담당자','농장주','지역','규모','돈사형태','접촉단계','거래가능일자','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
+  ['담당자','농장주','지역','규모','돈사형태','현재거래처','접촉단계','거래가능일자','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
     updates[k] = document.getElementById('edit-'+k).value;
   });
   const probRaw = document.getElementById('edit-가능성').value.trim();
@@ -1308,7 +1368,7 @@ async function deleteFarm(id){
 
 function openAddModal(){
   const modal = document.getElementById('modal');
-  const fields = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','접촉단계','가능성','등급','대여금유무','사양가니즈','차주액션'];
+  const fields = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','현재거래처','접촉단계','가능성','등급','대여금유무','사양가니즈','차주액션'];
   modal.innerHTML = `
     <button class="close-btn" onclick="closeModal()">&times;</button>
     <h2>새 거래처 추가</h2>
@@ -1339,7 +1399,7 @@ function openAddModal(){
 
 async function saveNew(){
   const updates = { 농가명: document.getElementById('edit-농가명').value };
-  ['담당자','농장주','지역','규모','돈사형태','접촉단계','거래가능일자','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
+  ['담당자','농장주','지역','규모','돈사형태','현재거래처','접촉단계','거래가능일자','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
     updates[k] = document.getElementById('edit-'+k).value;
   });
   const probRaw = document.getElementById('edit-가능성').value.trim();
