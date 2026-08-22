@@ -1201,23 +1201,26 @@ function closeModal(){ document.getElementById('modal-overlay').style.display = 
 document.getElementById('modal-overlay').addEventListener('click', e=>{ if(e.target.id==='modal-overlay') closeModal(); });
 
 // ---- 차수별 미팅사항 (날짜 있는 진행상황 로그, 계속 추가되는 형태) ----
-function meetingLogEntriesDesc(f){
-  const list = Array.isArray(f.미팅이력) ? f.미팅이력 : [];
-  return list.map((m,i)=>({...m, no:i+1})).slice().reverse();
+function meetingLogEntriesDesc(list){
+  return (Array.isArray(list) ? list : []).map((m,i)=>({...m, no:i+1})).slice().reverse();
+}
+
+function meetingLogRowsHtml(entries){
+  if(!entries.length) return '<div style="font-size:12.5px;color:var(--muted);">등록된 미팅 이력이 없습니다</div>';
+  return entries.map(m=>`<div class="hist-item"><span class="hm">${m.no}차 · ${m.날짜||'-'}</span><br>${(m.내용||'-').toString().replace(/\n/g,'<br>')}</div>`).join('');
 }
 
 function meetingLogListHtml(f){
-  const entries = meetingLogEntriesDesc(f);
+  const entries = meetingLogEntriesDesc(f.미팅이력);
   if(!entries.length) return '';
-  const rows = entries.map(m=>`<div class="hist-item"><span class="hm">${m.no}차 · ${m.날짜||'-'}</span><br>${(m.내용||'-').toString().replace(/\n/g,'<br>')}</div>`).join('');
-  return `<div class="kv"><div class="k">차수별 미팅사항</div><div>${rows}</div></div>`;
+  return `<div class="kv"><div class="k">차수별 미팅사항</div><div>${meetingLogRowsHtml(entries)}</div></div>`;
 }
 
+// 기존 거래처 수정: 추가하면 그 즉시 서버에 저장됨
 function meetingLogEditHtml(f){
-  const entries = meetingLogEntriesDesc(f);
-  const rows = entries.map(m=>`<div class="hist-item"><span class="hm">${m.no}차 · ${m.날짜||'-'}</span><br>${(m.내용||'-').toString().replace(/\n/g,'<br>')}</div>`).join('');
+  const entries = meetingLogEntriesDesc(f.미팅이력);
   return `<div class="kv"><div class="k">차수별 미팅사항</div><div>
-    ${rows || '<div style="font-size:12.5px;color:var(--muted);">등록된 미팅 이력이 없습니다</div>'}
+    ${meetingLogRowsHtml(entries)}
     <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:flex-start;">
       <input type="date" id="meeting-log-date" value="${localDateStr(new Date())}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">
       <textarea id="meeting-log-text" rows="2" placeholder="이번 차수 진행사항을 입력하세요" style="flex:1;min-width:160px;border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;"></textarea>
@@ -1249,6 +1252,39 @@ async function addMeetingLog(id){
   }catch(e){
     if(statusEl) statusEl.textContent = '추가 실패: ' + e.message;
   }
+}
+
+// 새 거래처 추가 중(아직 서버에 저장 전): 미팅 항목은 임시 배열에만 쌓아뒀다가
+// '추가' 버튼을 눌러 거래처를 생성할 때 한 번에 함께 저장됨
+let newFarmMeetingLog = [];
+
+function meetingLogDraftHtml(){
+  const entries = meetingLogEntriesDesc(newFarmMeetingLog);
+  return `<div class="kv" id="meeting-log-draft-box"><div class="k">차수별 미팅사항</div><div>
+    ${meetingLogRowsHtml(entries)}
+    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:flex-start;">
+      <input type="date" id="meeting-log-date" value="${localDateStr(new Date())}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">
+      <textarea id="meeting-log-text" rows="2" placeholder="이번 차수 진행사항을 입력하세요" style="flex:1;min-width:160px;border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;"></textarea>
+      <button type="button" class="tab-btn active" onclick="addMeetingLogDraft()">+ 추가</button>
+    </div>
+    <span class="upload-status" id="meeting-log-status"></span>
+  </div></div>`;
+}
+
+function addMeetingLogDraft(){
+  const dateEl = document.getElementById('meeting-log-date');
+  const textEl = document.getElementById('meeting-log-text');
+  const statusEl = document.getElementById('meeting-log-status');
+  const 날짜 = dateEl ? dateEl.value : '';
+  const 내용 = textEl ? textEl.value.trim() : '';
+  if(!날짜 || !내용){
+    if(statusEl) statusEl.textContent = '날짜와 내용을 모두 입력해주세요';
+    return;
+  }
+  newFarmMeetingLog.push({ 날짜, 내용 });
+  // 다른 입력 필드(농가명 등)에 이미 입력해둔 값이 사라지지 않도록 이 블록만 갱신
+  const box = document.getElementById('meeting-log-draft-box');
+  if(box) box.outerHTML = meetingLogDraftHtml();
 }
 
 function renderModalView(f){
@@ -1368,20 +1404,16 @@ async function deleteFarm(id){
 
 function openAddModal(){
   const modal = document.getElementById('modal');
-  const fields = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','현재거래처','접촉단계','가능성','등급','대여금유무','사양가니즈','차주액션'];
+  newFarmMeetingLog = [];
+  const fieldsA = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','현재거래처','접촉단계','가능성','등급','대여금유무','사양가니즈'];
+  const fieldsB = ['차주액션'];
   modal.innerHTML = `
     <button class="close-btn" onclick="closeModal()">&times;</button>
     <h2>새 거래처 추가</h2>
     <div class="kv"><div class="k">농가명</div><input id="edit-농가명" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
-    ${fields.map(k=>`
-      <div class="kv"><div class="k">${FIELD_LABELS[k]}</div>
-      ${k==='접촉단계'||k==='사양가니즈'||k==='차주액션'
-        ? `<textarea id="edit-${k}" rows="2" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;"></textarea>`
-        : k==='가능성'
-          ? `<input id="edit-가능성" type="number" min="0" max="100" step="1" placeholder="0~100" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">`
-          : `<input id="edit-${k}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">`
-      }</div>
-    `).join('')}
+    ${fieldsA.map(k=>editFieldRowHtml({},k)).join('')}
+    ${meetingLogDraftHtml()}
+    ${fieldsB.map(k=>editFieldRowHtml({},k)).join('')}
     <div class="kv"><div class="k">상태</div><select id="edit-상태" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">
       <option value="진행중" selected>진행중</option>
       <option value="계약완료">계약완료</option>
@@ -1405,6 +1437,7 @@ async function saveNew(){
   const probRaw = document.getElementById('edit-가능성').value.trim();
   updates['가능성'] = probRaw === '' ? null : parseFloat(probRaw)/100;
   updates['상태'] = document.getElementById('edit-상태').value;
+  updates['미팅이력'] = newFarmMeetingLog;
   const editor = document.getElementById('edit-수정자').value.trim();
   const errBox = document.getElementById('edit-error');
   if(!updates['농가명']){
@@ -1415,6 +1448,7 @@ async function saveNew(){
   try{
     const saved = await apiRequest('PUT', { id: null, updates, editor });
     FARMS.push(saved);
+    newFarmMeetingLog = [];
     closeModal();
     renderAll();
   }catch(e){
