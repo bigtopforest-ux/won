@@ -1206,9 +1206,10 @@ function openModal(id){
 function closeModal(){ document.getElementById('modal-overlay').style.display = 'none'; }
 document.getElementById('modal-overlay').addEventListener('click', e=>{ if(e.target.id==='modal-overlay') closeModal(); });
 
-// ---- 차수별 미팅사항 (날짜 있는 진행상황 로그, 계속 추가되는 형태) ----
+// ---- 차수별 미팅사항 (날짜 있는 진행상황 로그, 계속 추가/수정/삭제되는 형태) ----
+// idx는 실제 저장 배열(f.미팅이력)에서의 위치 — 수정/삭제 시 이 위치를 그대로 사용
 function meetingLogEntriesDesc(list){
-  return (Array.isArray(list) ? list : []).map((m,i)=>({...m, no:i+1})).slice().reverse();
+  return (Array.isArray(list) ? list : []).map((m,i)=>({...m, no:i+1, idx:i})).slice().reverse();
 }
 
 function meetingLogRowsHtml(entries){
@@ -1222,11 +1223,24 @@ function meetingLogListHtml(f){
   return `<div class="kv"><div class="k">차수별 미팅사항</div><div>${meetingLogRowsHtml(entries)}</div></div>`;
 }
 
-// 기존 거래처 수정: 추가하면 그 즉시 서버에 저장됨
+// 기존 거래처 수정: 추가/수정/삭제 모두 그 즉시 서버에 저장됨
+function meetingLogEditRowHtml(farmId, m){
+  return `<div class="hist-item" id="meeting-log-row-${m.idx}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+      <div><span class="hm">${m.no}차 · ${m.날짜||'-'}</span><br>${(m.내용||'-').toString().replace(/\n/g,'<br>')}</div>
+      <div style="display:flex;gap:4px;flex-shrink:0;">
+        <button type="button" class="tab-btn" style="padding:2px 8px;font-size:11px;" onclick="startEditMeetingLogRow(${farmId},${m.idx})">수정</button>
+        <button type="button" class="tab-btn" style="padding:2px 8px;font-size:11px;color:#B0281F;" onclick="deleteMeetingLogRow(${farmId},${m.idx})">삭제</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 function meetingLogEditHtml(f){
   const entries = meetingLogEntriesDesc(f.미팅이력);
+  const rows = entries.length ? entries.map(m=>meetingLogEditRowHtml(f.id,m)).join('') : '<div style="font-size:12.5px;color:var(--muted);">등록된 미팅 이력이 없습니다</div>';
   return `<div class="kv"><div class="k">차수별 미팅사항</div><div>
-    ${meetingLogRowsHtml(entries)}
+    ${rows}
     <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:flex-start;">
       <input type="date" id="meeting-log-date" value="${localDateStr(new Date())}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">
       <textarea id="meeting-log-text" rows="2" placeholder="이번 차수 진행사항을 입력하세요" style="flex:1;min-width:160px;border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;"></textarea>
@@ -1260,14 +1274,75 @@ async function addMeetingLog(id){
   }
 }
 
+function startEditMeetingLogRow(farmId, idx){
+  const f = FARMS.find(x=>x.id===farmId);
+  const m = f && Array.isArray(f.미팅이력) ? f.미팅이력[idx] : null;
+  const row = document.getElementById(`meeting-log-row-${idx}`);
+  if(!f || !m || !row) return;
+  row.outerHTML = `<div class="hist-item" id="meeting-log-row-${idx}">
+    <input type="date" id="meeting-log-edit-date-${idx}" value="${m.날짜||''}" style="border:1px solid #e2e8e4;border-radius:6px;padding:4px 6px;font-size:12px;">
+    <textarea id="meeting-log-edit-text-${idx}" rows="2" style="width:100%;margin-top:4px;border:1px solid #e2e8e4;border-radius:6px;padding:4px 6px;font-size:12px;font-family:inherit;">${(m.내용||'').toString()}</textarea>
+    <div style="display:flex;gap:6px;margin-top:4px;">
+      <button type="button" class="tab-btn active" style="padding:2px 8px;font-size:11px;" onclick="saveMeetingLogRowEdit(${farmId},${idx})">저장</button>
+      <button type="button" class="tab-btn" style="padding:2px 8px;font-size:11px;" onclick="renderModalEdit(${farmId})">취소</button>
+    </div>
+  </div>`;
+}
+
+async function saveMeetingLogRowEdit(farmId, idx){
+  const dateEl = document.getElementById(`meeting-log-edit-date-${idx}`);
+  const textEl = document.getElementById(`meeting-log-edit-text-${idx}`);
+  const 날짜 = dateEl ? dateEl.value : '';
+  const 내용 = textEl ? textEl.value.trim() : '';
+  if(!날짜 || !내용){ alert('날짜와 내용을 모두 입력해주세요'); return; }
+  const f = FARMS.find(x=>x.id===farmId);
+  if(!f || !Array.isArray(f.미팅이력) || !f.미팅이력[idx]) return;
+  const history = f.미팅이력.slice();
+  history[idx] = { 날짜, 내용 };
+  try{
+    const saved = await apiRequest('PUT', { id: farmId, updates: { 미팅이력: history } });
+    const fi = FARMS.findIndex(x=>x.id===farmId);
+    if(fi>-1) FARMS[fi] = saved;
+    renderModalEdit(farmId);
+  }catch(e){
+    alert('수정 실패: ' + e.message);
+  }
+}
+
+async function deleteMeetingLogRow(farmId, idx){
+  const f = FARMS.find(x=>x.id===farmId);
+  if(!f || !Array.isArray(f.미팅이력) || !f.미팅이력[idx]) return;
+  if(!confirm(`${idx+1}차 미팅 기록을 삭제할까요?`)) return;
+  const history = f.미팅이력.slice();
+  history.splice(idx,1);
+  try{
+    const saved = await apiRequest('PUT', { id: farmId, updates: { 미팅이력: history } });
+    const fi = FARMS.findIndex(x=>x.id===farmId);
+    if(fi>-1) FARMS[fi] = saved;
+    renderModalEdit(farmId);
+  }catch(e){
+    alert('삭제 실패: ' + e.message);
+  }
+}
+
 // 새 거래처 추가 중(아직 서버에 저장 전): 미팅 항목은 임시 배열에만 쌓아뒀다가
 // '추가' 버튼을 눌러 거래처를 생성할 때 한 번에 함께 저장됨
 let newFarmMeetingLog = [];
 
+function meetingLogDraftRowHtml(m){
+  return `<div class="hist-item">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+      <div><span class="hm">${m.no}차 · ${m.날짜||'-'}</span><br>${(m.내용||'-').toString().replace(/\n/g,'<br>')}</div>
+      <button type="button" class="tab-btn" style="padding:2px 8px;font-size:11px;color:#B0281F;flex-shrink:0;" onclick="deleteMeetingLogDraftRow(${m.idx})">삭제</button>
+    </div>
+  </div>`;
+}
+
 function meetingLogDraftHtml(){
   const entries = meetingLogEntriesDesc(newFarmMeetingLog);
+  const rows = entries.length ? entries.map(meetingLogDraftRowHtml).join('') : '<div style="font-size:12.5px;color:var(--muted);">등록된 미팅 이력이 없습니다</div>';
   return `<div class="kv" id="meeting-log-draft-box"><div class="k">차수별 미팅사항</div><div>
-    ${meetingLogRowsHtml(entries)}
+    ${rows}
     <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:flex-start;">
       <input type="date" id="meeting-log-date" value="${localDateStr(new Date())}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">
       <textarea id="meeting-log-text" rows="2" placeholder="이번 차수 진행사항을 입력하세요" style="flex:1;min-width:160px;border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;"></textarea>
@@ -1275,6 +1350,12 @@ function meetingLogDraftHtml(){
     </div>
     <span class="upload-status" id="meeting-log-status"></span>
   </div></div>`;
+}
+
+function deleteMeetingLogDraftRow(idx){
+  newFarmMeetingLog.splice(idx,1);
+  const box = document.getElementById('meeting-log-draft-box');
+  if(box) box.outerHTML = meetingLogDraftHtml();
 }
 
 function addMeetingLogDraft(){
