@@ -182,8 +182,8 @@
   .delay-reason-box textarea{width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:12.5px;font-family:inherit;resize:vertical;margin-bottom:6px;}
 
   .farm-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:12px;box-shadow:0 1px 2px rgba(30,35,40,.04);cursor:pointer;}
-  .farm-card-head{display:grid;grid-template-columns:minmax(120px,160px) repeat(6,minmax(64px,1fr)) 78px 16px;gap:14px;padding:0 18px 6px;font-size:11px;font-weight:700;color:var(--muted);}
-  .farm-card-top{display:grid;grid-template-columns:minmax(120px,160px) repeat(6,minmax(64px,1fr)) 78px 16px;align-items:center;gap:14px;}
+  .farm-card-head{display:grid;grid-template-columns:minmax(120px,160px) repeat(7,minmax(64px,1fr)) 78px 16px;gap:14px;padding:0 18px 6px;font-size:11px;font-weight:700;color:var(--muted);}
+  .farm-card-top{display:grid;grid-template-columns:minmax(120px,160px) repeat(7,minmax(64px,1fr)) 78px 16px;align-items:center;gap:14px;}
   .farm-card-name{font-size:16px;font-weight:800;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .farm-card-stat{display:flex;flex-direction:column;min-width:0;}
   .farm-card-stat b{font-size:19px;font-weight:800;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -343,7 +343,6 @@
     <select id="filterOwner"><option value="">담당자 전체</option></select>
     <select id="filterRegion"><option value="">지역 전체</option></select>
     <select id="filterStage"><option value="">단계 전체</option></select>
-    <select id="filterDeal"><option value="">거래가능일자 전체</option></select>
     <select id="farmsPageSize">
       <option value="20">20개씩</option>
       <option value="50">50개씩</option>
@@ -359,6 +358,7 @@
       <option value="최근업데이트">최근업데이트순</option>
     </select>
     <button class="tab-btn" id="farmsSortDirBtn" onclick="toggleFarmsSortDir()">내림차순 ▼</button>
+    <select id="filterDeal"><option value="">거래가능일자 전체</option></select>
   </div>
   <div id="farms-cards-head"></div>
   <div id="farms-cards-box"></div>
@@ -1151,7 +1151,7 @@ function renderTable(){
     box.innerHTML = '<p class="upload-status">표시할 거래처가 없습니다.</p>';
     if(headEl) headEl.innerHTML = '';
   } else {
-    if(headEl) headEl.innerHTML = `<div class="farm-card-head"><span>농가명</span><span>담당자</span><span>지역</span><span>규모</span><span>단계</span><span>가능성</span><span>등급·업데이트</span><span></span><span></span></div>`;
+    if(headEl) headEl.innerHTML = `<div class="farm-card-head"><span>농가명</span><span>담당자</span><span>지역</span><span>규모</span><span>거래가능일자</span><span>단계</span><span>가능성</span><span>등급·업데이트</span><span></span><span></span></div>`;
     box.innerHTML = shown.map(f=>{
       const st = normalizeStatus(f);
       const badge = st==='드랍' ? '<span class="badge badge-drop">드랍</span>' : st==='계약완료' ? '<span class="badge badge-contract">계약완료</span>' : '<span class="badge badge-active">진행중</span>';
@@ -1161,6 +1161,7 @@ function renderTable(){
           <div class="farm-card-stat"><b>${f.담당자||'-'}</b><span class="stat-label">담당자</span></div>
           <div class="farm-card-stat"><b>${f.지역||'-'}</b><span class="stat-label">지역</span></div>
           <div class="farm-card-stat"><b>${f.규모||'-'}</b><span class="stat-label">규모</span></div>
+          <div class="farm-card-stat"><b>${f.거래가능일자||'-'}</b><span class="stat-label">거래가능일자</span></div>
           <div class="farm-card-stat"><b>${f.접촉단계||'-'}</b><span class="stat-label">단계</span></div>
           <div class="farm-card-stat"><b>${fmtProb(f.가능성)}</b><span class="stat-label">가능성</span></div>
           <div class="farm-card-stat"><b class="grade">${f.등급||'-'}</b><span class="stat-label">등급 · ${f.최근업데이트}</span></div>
