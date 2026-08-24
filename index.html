@@ -1212,33 +1212,35 @@ function meetingLogEntriesDesc(list){
   return (Array.isArray(list) ? list : []).map((m,i)=>({...m, no:i+1, idx:i})).slice().reverse();
 }
 
-function meetingLogRowsHtml(entries){
-  if(!entries.length) return '<div style="font-size:12.5px;color:var(--muted);">등록된 미팅 이력이 없습니다</div>';
-  return entries.map(m=>`<div class="hist-item"><span class="hm">${m.no}차 · ${m.날짜||'-'}</span><br>${(m.내용||'-').toString().replace(/\n/g,'<br>')}</div>`).join('');
+// mode: 'view'(상세보기 화면) | 'edit'(수정 화면) — 저장/취소 후 어느 화면으로 되돌아갈지 결정
+function meetingLogReturnCall(farmId, mode){
+  return mode==='view' ? `renderModalView(FARMS.find(x=>x.id===${farmId}))` : `renderModalEdit(${farmId})`;
 }
 
-function meetingLogListHtml(f){
-  const entries = meetingLogEntriesDesc(f.미팅이력);
-  if(!entries.length) return '';
-  return `<div class="kv"><div class="k">차수별 미팅사항</div><div>${meetingLogRowsHtml(entries)}</div></div>`;
-}
-
-// 기존 거래처 수정: 추가/수정/삭제 모두 그 즉시 서버에 저장됨
-function meetingLogEditRowHtml(farmId, m){
+function meetingLogEditRowHtml(farmId, m, mode){
   return `<div class="hist-item" id="meeting-log-row-${m.idx}">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
       <div><span class="hm">${m.no}차 · ${m.날짜||'-'}</span><br>${(m.내용||'-').toString().replace(/\n/g,'<br>')}</div>
       <div style="display:flex;gap:4px;flex-shrink:0;">
-        <button type="button" class="tab-btn" style="padding:2px 8px;font-size:11px;" onclick="startEditMeetingLogRow(${farmId},${m.idx})">수정</button>
-        <button type="button" class="tab-btn" style="padding:2px 8px;font-size:11px;color:#B0281F;" onclick="deleteMeetingLogRow(${farmId},${m.idx})">삭제</button>
+        <button type="button" class="tab-btn" style="padding:2px 8px;font-size:11px;" onclick="startEditMeetingLogRow(${farmId},${m.idx},'${mode}')">수정</button>
+        <button type="button" class="tab-btn" style="padding:2px 8px;font-size:11px;color:#B0281F;" onclick="deleteMeetingLogRow(${farmId},${m.idx},'${mode}')">삭제</button>
       </div>
     </div>
   </div>`;
 }
 
+// 상세보기 화면: 여기서도 바로 수정/삭제 가능
+function meetingLogListHtml(f){
+  const entries = meetingLogEntriesDesc(f.미팅이력);
+  if(!entries.length) return '';
+  const rows = entries.map(m=>meetingLogEditRowHtml(f.id,m,'view')).join('');
+  return `<div class="kv"><div class="k">차수별 미팅사항</div><div>${rows}</div></div>`;
+}
+
+// 수정 화면: 추가/수정/삭제 모두 그 즉시 서버에 저장됨
 function meetingLogEditHtml(f){
   const entries = meetingLogEntriesDesc(f.미팅이력);
-  const rows = entries.length ? entries.map(m=>meetingLogEditRowHtml(f.id,m)).join('') : '<div style="font-size:12.5px;color:var(--muted);">등록된 미팅 이력이 없습니다</div>';
+  const rows = entries.length ? entries.map(m=>meetingLogEditRowHtml(f.id,m,'edit')).join('') : '<div style="font-size:12.5px;color:var(--muted);">등록된 미팅 이력이 없습니다</div>';
   return `<div class="kv"><div class="k">차수별 미팅사항</div><div>
     ${rows}
     <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:flex-start;">
@@ -1274,7 +1276,7 @@ async function addMeetingLog(id){
   }
 }
 
-function startEditMeetingLogRow(farmId, idx){
+function startEditMeetingLogRow(farmId, idx, mode){
   const f = FARMS.find(x=>x.id===farmId);
   const m = f && Array.isArray(f.미팅이력) ? f.미팅이력[idx] : null;
   const row = document.getElementById(`meeting-log-row-${idx}`);
@@ -1283,13 +1285,13 @@ function startEditMeetingLogRow(farmId, idx){
     <input type="date" id="meeting-log-edit-date-${idx}" value="${m.날짜||''}" style="border:1px solid #e2e8e4;border-radius:6px;padding:4px 6px;font-size:12px;">
     <textarea id="meeting-log-edit-text-${idx}" rows="2" style="width:100%;margin-top:4px;border:1px solid #e2e8e4;border-radius:6px;padding:4px 6px;font-size:12px;font-family:inherit;">${(m.내용||'').toString()}</textarea>
     <div style="display:flex;gap:6px;margin-top:4px;">
-      <button type="button" class="tab-btn active" style="padding:2px 8px;font-size:11px;" onclick="saveMeetingLogRowEdit(${farmId},${idx})">저장</button>
-      <button type="button" class="tab-btn" style="padding:2px 8px;font-size:11px;" onclick="renderModalEdit(${farmId})">취소</button>
+      <button type="button" class="tab-btn active" style="padding:2px 8px;font-size:11px;" onclick="saveMeetingLogRowEdit(${farmId},${idx},'${mode}')">저장</button>
+      <button type="button" class="tab-btn" style="padding:2px 8px;font-size:11px;" onclick="${meetingLogReturnCall(farmId,mode)}">취소</button>
     </div>
   </div>`;
 }
 
-async function saveMeetingLogRowEdit(farmId, idx){
+async function saveMeetingLogRowEdit(farmId, idx, mode){
   const dateEl = document.getElementById(`meeting-log-edit-date-${idx}`);
   const textEl = document.getElementById(`meeting-log-edit-text-${idx}`);
   const 날짜 = dateEl ? dateEl.value : '';
@@ -1303,13 +1305,13 @@ async function saveMeetingLogRowEdit(farmId, idx){
     const saved = await apiRequest('PUT', { id: farmId, updates: { 미팅이력: history } });
     const fi = FARMS.findIndex(x=>x.id===farmId);
     if(fi>-1) FARMS[fi] = saved;
-    renderModalEdit(farmId);
+    if(mode==='view') renderModalView(FARMS.find(x=>x.id===farmId)); else renderModalEdit(farmId);
   }catch(e){
     alert('수정 실패: ' + e.message);
   }
 }
 
-async function deleteMeetingLogRow(farmId, idx){
+async function deleteMeetingLogRow(farmId, idx, mode){
   const f = FARMS.find(x=>x.id===farmId);
   if(!f || !Array.isArray(f.미팅이력) || !f.미팅이력[idx]) return;
   if(!confirm(`${idx+1}차 미팅 기록을 삭제할까요?`)) return;
@@ -1319,7 +1321,7 @@ async function deleteMeetingLogRow(farmId, idx){
     const saved = await apiRequest('PUT', { id: farmId, updates: { 미팅이력: history } });
     const fi = FARMS.findIndex(x=>x.id===farmId);
     if(fi>-1) FARMS[fi] = saved;
-    renderModalEdit(farmId);
+    if(mode==='view') renderModalView(FARMS.find(x=>x.id===farmId)); else renderModalEdit(farmId);
   }catch(e){
     alert('삭제 실패: ' + e.message);
   }
