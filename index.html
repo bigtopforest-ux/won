@@ -1098,7 +1098,7 @@ function renderFilters(){
   const stageSel = document.getElementById('filterStage');
   const curOwner = ownerSel.value, curRegion = regionSel.value, curStage = stageSel.value;
   ownerSel.innerHTML = '<option value="">담당자 전체</option>' + uniqueSorted(FARMS.map(f=>f.담당자)).map(o=>`<option value="${o}">${o}</option>`).join('');
-  regionSel.innerHTML = '<option value="">지역 전체</option>' + uniqueSorted(FARMS.map(f=>f.지역)).map(r=>`<option value="${r}">${r}</option>`).join('');
+  regionSel.innerHTML = '<option value="">지역 전체</option>' + ['경남','경북'].map(r=>`<option value="${r}">${r}</option>`).join('');
   stageSel.innerHTML = '<option value="">단계 전체</option>' + uniqueSorted(FARMS.map(f=>f.stage_bucket)).map(s=>`<option value="${s}">${s}</option>`).join('');
   ownerSel.value = curOwner; regionSel.value = curRegion; stageSel.value = curStage;
 }
@@ -1130,7 +1130,7 @@ function renderTable(){
     if(currentStatus==='contract' && st!=='계약완료') return false;
     if(currentStatus==='drop' && st!=='드랍') return false;
     if(owner && f.담당자 !== owner) return false;
-    if(region && f.지역 !== region) return false;
+    if(region && !(f.지역||'').startsWith(region)) return false;
     if(stage && f.stage_bucket !== stage) return false;
     if(q && !((f.농가명||'').toLowerCase().includes(q) || (f.지역||'').toLowerCase().includes(q))) return false;
     return true;
