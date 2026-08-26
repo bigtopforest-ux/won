@@ -1440,17 +1440,18 @@ function dealDateInputsHtml(f){
 }
 
 // 지역 = 경남/경북 선택 + 시/군 자유 입력을 합친 값 ("경북 예천" 형태). 앞의 도(道) 접두사가 없으면 시/군만 입력된 것으로 봄.
+const PROVINCE_OPTIONS = ['경북','경남','대구','울산'];
+
 function regionInputsHtml(f){
   const raw = f.지역 || '';
   let curProvince = '', curCity = raw;
-  if(raw.startsWith('경남 ')){ curProvince='경남'; curCity = raw.slice(3).trim(); }
-  else if(raw.startsWith('경북 ')){ curProvince='경북'; curCity = raw.slice(3).trim(); }
+  const matched = PROVINCE_OPTIONS.find(p=>raw.startsWith(p+' '));
+  if(matched){ curProvince = matched; curCity = raw.slice(matched.length).trim(); }
   const selStyle = 'border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;';
   return `<div style="display:flex;gap:6px;">
     <select id="edit-지역도" style="${selStyle}flex:0 0 84px;">
       <option value="">선택안함</option>
-      <option value="경북" ${curProvince==='경북'?'selected':''}>경북</option>
-      <option value="경남" ${curProvince==='경남'?'selected':''}>경남</option>
+      ${PROVINCE_OPTIONS.map(p=>`<option value="${p}" ${curProvince===p?'selected':''}>${p}</option>`).join('')}
     </select>
     <input id="edit-지역시군" value="${curCity.replace(/"/g,'&quot;')}" placeholder="시/군 (예: 예천, 창녕)" style="${selStyle}flex:1;">
   </div>`;
