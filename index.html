@@ -359,7 +359,6 @@
       <option value="거래가능일자">거래가능일자순</option>
     </select>
     <button class="tab-btn" id="farmsSortDirBtn" onclick="toggleFarmsSortDir()">내림차순 ▼</button>
-    <select id="filterDeal"><option value="">거래가능일자 전체</option></select>
   </div>
   <div id="farms-cards-head"></div>
   <div id="farms-cards-box"></div>
@@ -1091,13 +1090,11 @@ function renderFilters(){
   const ownerSel = document.getElementById('filterOwner');
   const regionSel = document.getElementById('filterRegion');
   const stageSel = document.getElementById('filterStage');
-  const dealSel = document.getElementById('filterDeal');
-  const curOwner = ownerSel.value, curRegion = regionSel.value, curStage = stageSel.value, curDeal = dealSel.value;
+  const curOwner = ownerSel.value, curRegion = regionSel.value, curStage = stageSel.value;
   ownerSel.innerHTML = '<option value="">담당자 전체</option>' + uniqueSorted(FARMS.map(f=>f.담당자)).map(o=>`<option value="${o}">${o}</option>`).join('');
   regionSel.innerHTML = '<option value="">지역 전체</option>' + uniqueSorted(FARMS.map(f=>f.지역)).map(r=>`<option value="${r}">${r}</option>`).join('');
   stageSel.innerHTML = '<option value="">단계 전체</option>' + uniqueSorted(FARMS.map(f=>f.stage_bucket)).map(s=>`<option value="${s}">${s}</option>`).join('');
-  dealSel.innerHTML = '<option value="">거래가능일자 전체</option>' + uniqueSorted(FARMS.map(f=>f.거래가능일자)).map(d=>`<option value="${d}">${d}</option>`).join('');
-  ownerSel.value = curOwner; regionSel.value = curRegion; stageSel.value = curStage; dealSel.value = curDeal;
+  ownerSel.value = curOwner; regionSel.value = curRegion; stageSel.value = curStage;
 }
 
 let currentStatus = 'active';
@@ -1118,7 +1115,6 @@ function renderTable(){
   const owner = document.getElementById('filterOwner').value;
   const region = document.getElementById('filterRegion').value;
   const stage = document.getElementById('filterStage').value;
-  const deal = document.getElementById('filterDeal').value;
   const sortFieldEl = document.getElementById('farmsSortField');
   if(sortFieldEl) farmsSortField = sortFieldEl.value;
 
@@ -1130,7 +1126,6 @@ function renderTable(){
     if(owner && f.담당자 !== owner) return false;
     if(region && f.지역 !== region) return false;
     if(stage && f.stage_bucket !== stage) return false;
-    if(deal && f.거래가능일자 !== deal) return false;
     if(q && !((f.농가명||'').toLowerCase().includes(q) || (f.지역||'').toLowerCase().includes(q))) return false;
     return true;
   });
@@ -1202,7 +1197,7 @@ document.querySelectorAll('.tabs .tab-btn').forEach(btn=>{
   });
 });
 document.getElementById('search').addEventListener('input', renderTable);
-['filterOwner','filterRegion','filterStage','filterDeal','farmsPageSize'].forEach(id=>document.getElementById(id).addEventListener('change', renderTable));
+['filterOwner','filterRegion','filterStage','farmsPageSize'].forEach(id=>document.getElementById(id).addEventListener('change', renderTable));
 
 const FIELD_LABELS = {
   담당자:'담당자', 농장주:'농장주', 지역:'지역', 규모:'규모', 돈사형태:'돈사형태', 환기형태:'환기형태', 현재거래처:'현재 거래처', 접촉단계:'접촉단계',
