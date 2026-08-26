@@ -356,6 +356,7 @@
       <option value="지역">지역순</option>
       <option value="등급">등급순</option>
       <option value="최근업데이트">최근업데이트순</option>
+      <option value="거래가능일자">거래가능일자순</option>
     </select>
     <button class="tab-btn" id="farmsSortDirBtn" onclick="toggleFarmsSortDir()">내림차순 ▼</button>
     <select id="filterDeal"><option value="">거래가능일자 전체</option></select>
@@ -1016,6 +1017,15 @@ function fmtProb(p){
   return Math.round(p*100)+'%';
 }
 
+const DEAL_PART_RANK = {초:1, 중:2, 말:3};
+// 거래가능일자 정렬용 키: 년/월/시기(초·중·말)를 하나의 비교 가능한 숫자로 합침. 미입력(미정)은 0으로 취급.
+function dealDateSortKey(f){
+  const y = Number(f.거래가능년)||0;
+  const m = Number(f.거래가능월)||0;
+  const p = DEAL_PART_RANK[f.거래가능시기] || 0;
+  return y*1000 + m*10 + p;
+}
+
 function renderKPI(){
   const s = computeSummary(FARMS);
   const kpis = [
@@ -1133,6 +1143,7 @@ function renderTable(){
       case '지역': va=a.지역||''; vb=b.지역||''; break;
       case '등급': va=a.등급||''; vb=b.등급||''; break;
       case '최근업데이트': va=a.최근업데이트||''; vb=b.최근업데이트||''; break;
+      case '거래가능일자': va=dealDateSortKey(a); vb=dealDateSortKey(b); break;
       default: va=a.가능성||0; vb=b.가능성||0; break;
     }
     let cmp;
@@ -1409,7 +1420,33 @@ function renderModalView(f){
   `;
 }
 
+function dealDateInputsHtml(f){
+  const curYear = f.거래가능년 || '';
+  const curMonth = f.거래가능월 || '';
+  const curPart = f.거래가능시기 || '';
+  const baseYear = new Date().getFullYear();
+  const years = []; for(let y=baseYear-1; y<=baseYear+2; y++) years.push(y);
+  const selStyle = 'border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;';
+  return `<div style="display:flex;gap:6px;">
+    <select id="edit-거래가능년" style="${selStyle}flex:1;">
+      <option value="">년도</option>
+      ${years.map(y=>`<option value="${y}" ${String(y)===String(curYear)?'selected':''}>${y}년</option>`).join('')}
+    </select>
+    <select id="edit-거래가능월" style="${selStyle}flex:1;">
+      <option value="">월</option>
+      ${Array.from({length:12},(_,i)=>i+1).map(m=>`<option value="${m}" ${String(m)===String(curMonth)?'selected':''}>${m}월</option>`).join('')}
+    </select>
+    <select id="edit-거래가능시기" style="${selStyle}flex:1;">
+      <option value="">시기</option>
+      ${['초','중','말'].map(p=>`<option value="${p}" ${p===curPart?'selected':''}>${p}</option>`).join('')}
+    </select>
+  </div>`;
+}
+
 function editFieldRowHtml(f, k){
+  if(k==='거래가능일자'){
+    return `<div class="kv"><div class="k">${FIELD_LABELS[k]}</div>${dealDateInputsHtml(f)}</div>`;
+  }
   return `
       <div class="kv"><div class="k">${FIELD_LABELS[k]}</div>
       ${k==='접촉단계'||k==='사양가니즈'||k==='차주액션'
@@ -1455,11 +1492,23 @@ function renderModalEdit(id){
   `;
 }
 
+function readDealDateInputs(){
+  const yEl = document.getElementById('edit-거래가능년');
+  const mEl = document.getElementById('edit-거래가능월');
+  const pEl = document.getElementById('edit-거래가능시기');
+  const y = yEl ? yEl.value : '';
+  const m = mEl ? mEl.value : '';
+  const p = pEl ? pEl.value : '';
+  const display = [y?y+'년':'', m?m+'월':'', p].filter(Boolean).join(' ');
+  return { 거래가능년: y, 거래가능월: m, 거래가능시기: p, 거래가능일자: display };
+}
+
 async function saveEdit(id){
   const updates = { 농가명: document.getElementById('edit-농가명').value };
-  ['담당자','농장주','지역','규모','돈사형태','현재거래처','접촉단계','거래가능일자','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
+  ['담당자','농장주','지역','규모','돈사형태','현재거래처','접촉단계','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
     updates[k] = document.getElementById('edit-'+k).value;
   });
+  Object.assign(updates, readDealDateInputs());
   const probRaw = document.getElementById('edit-가능성').value.trim();
   updates['가능성'] = probRaw === '' ? null : parseFloat(probRaw)/100;
   updates['상태'] = document.getElementById('edit-상태').value;
@@ -1520,9 +1569,10 @@ function openAddModal(){
 
 async function saveNew(){
   const updates = { 농가명: document.getElementById('edit-농가명').value };
-  ['담당자','농장주','지역','규모','돈사형태','현재거래처','접촉단계','거래가능일자','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
+  ['담당자','농장주','지역','규모','돈사형태','현재거래처','접촉단계','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
     updates[k] = document.getElementById('edit-'+k).value;
   });
+  Object.assign(updates, readDealDateInputs());
   const probRaw = document.getElementById('edit-가능성').value.trim();
   updates['가능성'] = probRaw === '' ? null : parseFloat(probRaw)/100;
   updates['상태'] = document.getElementById('edit-상태').value;
