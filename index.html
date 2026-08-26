@@ -1485,6 +1485,7 @@ function readSelectWithOther(fieldKey){
 const BARN_TYPE_OPTIONS = ['올슬러리','반슬러리','스크레퍼','평사','톱밥','기타'];
 const VENT_TYPE_OPTIONS = ['무창돈사','윈치돈사','기타'];
 const GRADE_OPTIONS = ['S','A','B','C','D'];
+const OWNER_OPTIONS = ['유재방','정동현','이원희'];
 
 function editFieldRowHtml(f, k){
   if(k==='거래가능일자'){
@@ -1505,6 +1506,14 @@ function editFieldRowHtml(f, k){
     return `<div class="kv"><div class="k">${FIELD_LABELS[k]}</div><select id="edit-등급" style="${selStyle}width:100%;">
       <option value="">선택안함</option>
       ${GRADE_OPTIONS.map(g=>`<option value="${g}" ${g===cur?'selected':''}>${g}</option>`).join('')}
+    </select></div>`;
+  }
+  if(k==='담당자'){
+    const cur = f.담당자||'';
+    const selStyle = 'border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;';
+    return `<div class="kv"><div class="k">${FIELD_LABELS[k]}</div><select id="edit-담당자" style="${selStyle}width:100%;">
+      <option value="">선택안함</option>
+      ${OWNER_OPTIONS.map(o=>`<option value="${o}" ${o===cur?'selected':''}>${o}</option>`).join('')}
     </select></div>`;
   }
   return `
@@ -1536,7 +1545,6 @@ function renderModalEdit(id){
       <option value="계약완료" ${normalizeStatus(f)==='계약완료'?'selected':''}>계약완료</option>
       <option value="드랍" ${normalizeStatus(f)==='드랍'?'selected':''}>드랍</option>
     </select></div>
-    <div class="kv"><div class="k">수정자</div><input id="edit-수정자" placeholder="이름을 입력하세요" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
     <div id="edit-error" style="color:#B0281F;font-size:12.5px;margin-top:6px;display:none;"></div>
     <div style="display:flex;gap:8px;margin-top:14px;">
       <button class="tab-btn" style="flex:1;justify-content:center;" onclick="renderModalView(FARMS.find(x=>x.id===${f.id}))">취소</button>
@@ -1583,7 +1591,7 @@ async function saveEdit(id){
   const probRaw = document.getElementById('edit-가능성').value.trim();
   updates['가능성'] = probRaw === '' ? null : parseFloat(probRaw)/100;
   updates['상태'] = document.getElementById('edit-상태').value;
-  const editor = document.getElementById('edit-수정자').value.trim();
+  const editor = '';
   const errBox = document.getElementById('edit-error');
   try{
     const saved = await apiRequest('PUT', { id, updates, editor });
@@ -1628,7 +1636,6 @@ function openAddModal(){
       <option value="계약완료">계약완료</option>
       <option value="드랍">드랍</option>
     </select></div>
-    <div class="kv"><div class="k">등록자</div><input id="edit-수정자" placeholder="이름을 입력하세요" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
     <div id="edit-error" style="color:#B0281F;font-size:12.5px;margin-top:6px;display:none;"></div>
     <div style="display:flex;gap:8px;margin-top:14px;">
       <button class="tab-btn" style="flex:1;justify-content:center;" onclick="closeModal()">취소</button>
@@ -1651,7 +1658,7 @@ async function saveNew(){
   updates['가능성'] = probRaw === '' ? null : parseFloat(probRaw)/100;
   updates['상태'] = document.getElementById('edit-상태').value;
   updates['미팅이력'] = newFarmMeetingLog;
-  const editor = document.getElementById('edit-수정자').value.trim();
+  const editor = '';
   const errBox = document.getElementById('edit-error');
   if(!updates['농가명']){
     errBox.textContent = '농가명을 입력해주세요';
