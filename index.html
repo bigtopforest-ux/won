@@ -1205,7 +1205,7 @@ document.getElementById('search').addEventListener('input', renderTable);
 ['filterOwner','filterRegion','filterStage','filterDeal','farmsPageSize'].forEach(id=>document.getElementById(id).addEventListener('change', renderTable));
 
 const FIELD_LABELS = {
-  담당자:'담당자', 농장주:'농장주', 지역:'지역', 규모:'규모', 돈사형태:'돈사형태', 현재거래처:'현재 거래처', 접촉단계:'접촉단계',
+  담당자:'담당자', 농장주:'농장주', 지역:'지역', 규모:'규모', 돈사형태:'돈사형태', 환기형태:'환기형태', 현재거래처:'현재 거래처', 접촉단계:'접촉단계',
   가능성:'가능성(%)', 거래가능일자:'거래가능일자', 등급:'등급', 대여금유무:'대여금', 사양가니즈:'니즈/메모', 차주액션:'차주 액션',
 };
 
@@ -1396,6 +1396,7 @@ function renderModalView(f){
     <div class="kv"><div class="k">농장주</div><div>${f.농장주||'-'}</div></div>
     <div class="kv"><div class="k">규모</div><div>${f.규모||'-'}</div></div>
     <div class="kv"><div class="k">돈사형태</div><div>${f.돈사형태||'-'}</div></div>
+    <div class="kv"><div class="k">환기형태</div><div>${f.환기형태||'-'}</div></div>
     <div class="kv"><div class="k">현재 거래처</div><div>${f.현재거래처||'-'}</div></div>
     <div class="kv"><div class="k">접촉단계</div><div>${f.접촉단계||'-'}</div></div>
     <div class="kv"><div class="k">가능성</div><div>${fmtProb(f.가능성)}</div></div>
@@ -1460,12 +1461,56 @@ function regionInputsHtml(f){
   </div>`;
 }
 
+// 목록에서 고르되 '기타' 선택 시 아래 직접입력 칸이 나타나는 선택형 필드 (돈사형태/환기형태 공용)
+function selectWithOtherHtml(fieldKey, options, currentValue){
+  const isOther = currentValue && !options.includes(currentValue);
+  const selStyle = 'border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;';
+  const selId = `edit-${fieldKey}-select`;
+  const otherId = `edit-${fieldKey}-other`;
+  return `<div>
+    <select id="${selId}" style="${selStyle}width:100%;" onchange="document.getElementById('${otherId}').style.display=(this.value==='기타')?'block':'none';">
+      <option value="">선택안함</option>
+      ${options.map(o=>`<option value="${o}" ${(!isOther && o===currentValue) || (isOther && o==='기타') ? 'selected':''}>${o}</option>`).join('')}
+    </select>
+    <input id="${otherId}" value="${isOther?currentValue.toString().replace(/"/g,'&quot;'):''}" placeholder="직접 입력" style="${selStyle}width:100%;margin-top:6px;display:${isOther?'block':'none'};">
+  </div>`;
+}
+
+function readSelectWithOther(fieldKey){
+  const selEl = document.getElementById(`edit-${fieldKey}-select`);
+  const otherEl = document.getElementById(`edit-${fieldKey}-other`);
+  const sel = selEl ? selEl.value : '';
+  if(sel === '기타'){
+    const other = otherEl ? otherEl.value.trim() : '';
+    return other || '기타';
+  }
+  return sel;
+}
+
+const BARN_TYPE_OPTIONS = ['올슬러리','반슬러리','스크레퍼','평사','톱밥','기타'];
+const VENT_TYPE_OPTIONS = ['무창돈사','윈치돈사','기타'];
+const GRADE_OPTIONS = ['S','A','B','C','D'];
+
 function editFieldRowHtml(f, k){
   if(k==='거래가능일자'){
     return `<div class="kv"><div class="k">${FIELD_LABELS[k]}</div>${dealDateInputsHtml(f)}</div>`;
   }
   if(k==='지역'){
     return `<div class="kv"><div class="k">${FIELD_LABELS[k]}</div>${regionInputsHtml(f)}</div>`;
+  }
+  if(k==='돈사형태'){
+    return `<div class="kv"><div class="k">${FIELD_LABELS[k]}</div>${selectWithOtherHtml('돈사형태', BARN_TYPE_OPTIONS, f.돈사형태||'')}</div>`;
+  }
+  if(k==='환기형태'){
+    return `<div class="kv"><div class="k">${FIELD_LABELS[k]}</div>${selectWithOtherHtml('환기형태', VENT_TYPE_OPTIONS, f.환기형태||'')}</div>`;
+  }
+  if(k==='등급'){
+    const cur = f.등급||'';
+    const selStyle = 'border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;';
+    return `<div class="kv"><div class="k">${FIELD_LABELS[k]}</div><select id="edit-등급" style="${selStyle}width:100%;">
+      <option value="">선택안함</option>
+      ${GRADE_OPTIONS.map(g=>`<option value="${g}" ${g===cur?'selected':''}>${g}</option>`).join('')}
+    </select></div>`;
   }
   return `
       <div class="kv"><div class="k">${FIELD_LABELS[k]}</div>
@@ -1481,7 +1526,7 @@ function editFieldRowHtml(f, k){
 function renderModalEdit(id){
   const f = FARMS.find(x=>x.id===id);
   const modal = document.getElementById('modal');
-  const fieldsA = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','현재거래처','접촉단계','가능성','등급','대여금유무','사양가니즈'];
+  const fieldsA = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','환기형태','현재거래처','접촉단계','가능성','등급','대여금유무','사양가니즈'];
   const fieldsB = ['차주액션'];
   modal.innerHTML = `
     <button class="close-btn" onclick="closeModal()">&times;</button>
@@ -1533,11 +1578,13 @@ function readRegionInput(){
 
 async function saveEdit(id){
   const updates = { 농가명: document.getElementById('edit-농가명').value };
-  ['담당자','농장주','규모','돈사형태','현재거래처','접촉단계','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
+  ['담당자','농장주','규모','현재거래처','접촉단계','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
     updates[k] = document.getElementById('edit-'+k).value;
   });
   Object.assign(updates, readDealDateInputs());
   Object.assign(updates, readRegionInput());
+  updates['돈사형태'] = readSelectWithOther('돈사형태');
+  updates['환기형태'] = readSelectWithOther('환기형태');
   const probRaw = document.getElementById('edit-가능성').value.trim();
   updates['가능성'] = probRaw === '' ? null : parseFloat(probRaw)/100;
   updates['상태'] = document.getElementById('edit-상태').value;
@@ -1572,7 +1619,7 @@ async function deleteFarm(id){
 function openAddModal(){
   const modal = document.getElementById('modal');
   newFarmMeetingLog = [];
-  const fieldsA = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','현재거래처','접촉단계','가능성','등급','대여금유무','사양가니즈'];
+  const fieldsA = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','환기형태','현재거래처','접촉단계','가능성','등급','대여금유무','사양가니즈'];
   const fieldsB = ['차주액션'];
   modal.innerHTML = `
     <button class="close-btn" onclick="closeModal()">&times;</button>
@@ -1598,11 +1645,13 @@ function openAddModal(){
 
 async function saveNew(){
   const updates = { 농가명: document.getElementById('edit-농가명').value };
-  ['담당자','농장주','규모','돈사형태','현재거래처','접촉단계','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
+  ['담당자','농장주','규모','현재거래처','접촉단계','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
     updates[k] = document.getElementById('edit-'+k).value;
   });
   Object.assign(updates, readDealDateInputs());
   Object.assign(updates, readRegionInput());
+  updates['돈사형태'] = readSelectWithOther('돈사형태');
+  updates['환기형태'] = readSelectWithOther('환기형태');
   const probRaw = document.getElementById('edit-가능성').value.trim();
   updates['가능성'] = probRaw === '' ? null : parseFloat(probRaw)/100;
   updates['상태'] = document.getElementById('edit-상태').value;
