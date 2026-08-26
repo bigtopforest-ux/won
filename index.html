@@ -1065,7 +1065,7 @@ function renderCharts(){
     options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{boxWidth:10,font:{size:11}}}}, scales:{
       x:{stacked:true},
       y:{stacked:true, beginAtZero:true, max:20, ticks:{stepSize:1,precision:0}, position:'left', title:{display:true,text:'건수',font:{size:10}}},
-      y1:{beginAtZero:true, position:'right', grid:{drawOnChartArea:false}, title:{display:true,text:'규모(두)',font:{size:10}}},
+      y1:{beginAtZero:true, position:'right', grid:{drawOnChartArea:false}, title:{display:true,text:'규모(두)',font:{size:10}}, ticks:{callback:v=>Number(v).toLocaleString('ko-KR')}},
     }}
   });
 
@@ -8264,7 +8264,7 @@ function buildFarmsWorkbook(XS, farms){
   } else {
     put(r, 0, '합계', { font:{bold:true, sz:10.5, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder(), alignment:{vertical:'center', horizontal:'center'} });
     put(r, 1, `${sorted.length}건`, { font:{bold:true, sz:10.5, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder(), alignment:{vertical:'center', horizontal:'center'} });
-    put(r, 4, totalScale, { font:{bold:true, sz:10.5, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder(), alignment:{vertical:'center', horizontal:'center'} });
+    put(r, 4, fmtScale(totalScale), { font:{bold:true, sz:10.5, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder(), alignment:{vertical:'center', horizontal:'center'} });
     for(let c=2;c<NCOLS;c++){
       if(c===4) continue;
       put(r, c, '', { fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder() });
