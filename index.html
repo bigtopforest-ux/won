@@ -1443,9 +1443,29 @@ function dealDateInputsHtml(f){
   </div>`;
 }
 
+// 지역 = 경남/경북 선택 + 시/군 자유 입력을 합친 값 ("경북 예천" 형태). 앞의 도(道) 접두사가 없으면 시/군만 입력된 것으로 봄.
+function regionInputsHtml(f){
+  const raw = f.지역 || '';
+  let curProvince = '', curCity = raw;
+  if(raw.startsWith('경남 ')){ curProvince='경남'; curCity = raw.slice(3).trim(); }
+  else if(raw.startsWith('경북 ')){ curProvince='경북'; curCity = raw.slice(3).trim(); }
+  const selStyle = 'border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;';
+  return `<div style="display:flex;gap:6px;">
+    <select id="edit-지역도" style="${selStyle}flex:0 0 84px;">
+      <option value="">선택안함</option>
+      <option value="경남" ${curProvince==='경남'?'selected':''}>경남</option>
+      <option value="경북" ${curProvince==='경북'?'selected':''}>경북</option>
+    </select>
+    <input id="edit-지역시군" value="${curCity.replace(/"/g,'&quot;')}" placeholder="시/군 (예: 예천, 창녕)" style="${selStyle}flex:1;">
+  </div>`;
+}
+
 function editFieldRowHtml(f, k){
   if(k==='거래가능일자'){
     return `<div class="kv"><div class="k">${FIELD_LABELS[k]}</div>${dealDateInputsHtml(f)}</div>`;
+  }
+  if(k==='지역'){
+    return `<div class="kv"><div class="k">${FIELD_LABELS[k]}</div>${regionInputsHtml(f)}</div>`;
   }
   return `
       <div class="kv"><div class="k">${FIELD_LABELS[k]}</div>
@@ -1503,12 +1523,21 @@ function readDealDateInputs(){
   return { 거래가능년: y, 거래가능월: m, 거래가능시기: p, 거래가능일자: display };
 }
 
+function readRegionInput(){
+  const provEl = document.getElementById('edit-지역도');
+  const cityEl = document.getElementById('edit-지역시군');
+  const prov = provEl ? provEl.value : '';
+  const city = cityEl ? cityEl.value.trim() : '';
+  return { 지역: [prov, city].filter(Boolean).join(' ') };
+}
+
 async function saveEdit(id){
   const updates = { 농가명: document.getElementById('edit-농가명').value };
-  ['담당자','농장주','지역','규모','돈사형태','현재거래처','접촉단계','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
+  ['담당자','농장주','규모','돈사형태','현재거래처','접촉단계','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
     updates[k] = document.getElementById('edit-'+k).value;
   });
   Object.assign(updates, readDealDateInputs());
+  Object.assign(updates, readRegionInput());
   const probRaw = document.getElementById('edit-가능성').value.trim();
   updates['가능성'] = probRaw === '' ? null : parseFloat(probRaw)/100;
   updates['상태'] = document.getElementById('edit-상태').value;
@@ -1569,10 +1598,11 @@ function openAddModal(){
 
 async function saveNew(){
   const updates = { 농가명: document.getElementById('edit-농가명').value };
-  ['담당자','농장주','지역','규모','돈사형태','현재거래처','접촉단계','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
+  ['담당자','농장주','규모','돈사형태','현재거래처','접촉단계','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
     updates[k] = document.getElementById('edit-'+k).value;
   });
   Object.assign(updates, readDealDateInputs());
+  Object.assign(updates, readRegionInput());
   const probRaw = document.getElementById('edit-가능성').value.trim();
   updates['가능성'] = probRaw === '' ? null : parseFloat(probRaw)/100;
   updates['상태'] = document.getElementById('edit-상태').value;
