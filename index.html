@@ -1166,7 +1166,7 @@ function renderTable(){
           <div class="farm-card-name">${f.농가명}</div>
           <div class="farm-card-stat"><b>${f.담당자||'-'}</b><span class="stat-label">담당자</span></div>
           <div class="farm-card-stat"><b>${f.지역||'-'}</b><span class="stat-label">지역</span></div>
-          <div class="farm-card-stat"><b>${f.규모||'-'}</b><span class="stat-label">규모</span></div>
+          <div class="farm-card-stat"><b>${f.규모?f.규모+'두':'-'}</b><span class="stat-label">규모</span></div>
           <div class="farm-card-stat"><b>${f.거래가능일자||'-'}</b><span class="stat-label">거래가능일자</span></div>
           <div class="farm-card-stat"><b>${f.접촉단계||'-'}</b><span class="stat-label">단계</span></div>
           <div class="farm-card-stat"><b>${fmtProb(f.가능성)}</b><span class="stat-label">가능성</span></div>
@@ -1389,7 +1389,7 @@ function renderModalView(f){
     <h2>${f.농가명 || '(이름 없음)'}</h2>
     <div class="sub">${f.담당자||'-'} 담당 · ${f.지역||'-'} · ${normalizeStatus(f)}</div>
     <div class="kv"><div class="k">농장주</div><div>${f.농장주||'-'}</div></div>
-    <div class="kv"><div class="k">규모</div><div>${f.규모||'-'}</div></div>
+    <div class="kv"><div class="k">규모</div><div>${f.규모?f.규모+'두':'-'}</div></div>
     <div class="kv"><div class="k">돈사형태</div><div>${f.돈사형태||'-'}</div></div>
     <div class="kv"><div class="k">환기형태</div><div>${f.환기형태||'-'}</div></div>
     <div class="kv"><div class="k">현재 거래처</div><div>${f.현재거래처||'-'}</div></div>
@@ -8233,7 +8233,7 @@ function buildFarmsWorkbook(XS, farms){
     const actionInfo = cleanNotes(f.차주액션);
     const row = [
       f.담당자||'-', f.농가명||'-', f.농장주||'-', f.지역||'-',
-      f.규모||'-', fmtProb(f.가능성), f.거래가능일자||'-', stageInfo.text || '-',
+      f.규모?f.규모+'두':'-', fmtProb(f.가능성), f.거래가능일자||'-', stageInfo.text || '-',
       status, nizInfo.text || '-', actionInfo.text || '-',
     ];
     totalScale += Number(f.규모)||0;
