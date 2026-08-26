@@ -1207,7 +1207,7 @@ document.getElementById('search').addEventListener('input', renderTable);
 
 const FIELD_LABELS = {
   담당자:'담당자', 농장주:'농장주', 지역:'지역', 규모:'규모', 돈사형태:'돈사형태', 환기형태:'환기형태', 현재거래처:'현재 거래처', 접촉단계:'접촉단계',
-  가능성:'가능성(%)', 거래가능일자:'거래가능일자', 등급:'등급', 대여금유무:'대여금', 사양가니즈:'니즈/메모', 차주액션:'차주 액션',
+  가능성:'가능성(%)', 거래가능일자:'거래가능일자', 등급:'등급', 대여금유무:'대여금', 사양가니즈:'니즈/거래조건/메모', 차주액션:'차주 액션',
 };
 
 function openModal(id){
@@ -1404,7 +1404,7 @@ function renderModalView(f){
     <div class="kv"><div class="k">거래가능일자</div><div>${f.거래가능일자||'-'}</div></div>
     <div class="kv"><div class="k">등급</div><div>${f.등급||'-'}</div></div>
     <div class="kv"><div class="k">대여금</div><div>${f.대여금유무||'-'}</div></div>
-    <div class="kv"><div class="k">니즈/메모</div><div>${(f.사양가니즈||'-').replace(/\n/g,'<br>')}</div></div>
+    <div class="kv"><div class="k">니즈/거래조건/메모</div><div>${(f.사양가니즈||'-').replace(/\n/g,'<br>')}</div></div>
     ${meetingLogListHtml(f)}
     <div class="kv"><div class="k">차주 액션</div><div>${(f.차주액션||'-').replace(/\n/g,'<br>')}</div></div>
     <div class="kv"><div class="k">최초등록</div><div>${f.최초등록}</div></div>
@@ -8186,7 +8186,7 @@ function cleanNotes(s, maxLines){
 function buildFarmsWorkbook(XS, farms){
   const ws = {};
   const merges = [];
-  const headers = ['담당자','농장','농장주','지역','사육규모','가능성','거래가능일자','접촉단계','상태','니즈/메모','차주액션'];
+  const headers = ['담당자','농장','농장주','지역','사육규모','가능성','거래가능일자','접촉단계','상태','니즈/거래조건/메모','차주액션'];
   const NCOLS = headers.length;
   let r = 0;
 
