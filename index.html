@@ -1454,8 +1454,8 @@ function regionInputsHtml(f){
   return `<div style="display:flex;gap:6px;">
     <select id="edit-지역도" style="${selStyle}flex:0 0 84px;">
       <option value="">선택안함</option>
-      <option value="경남" ${curProvince==='경남'?'selected':''}>경남</option>
       <option value="경북" ${curProvince==='경북'?'selected':''}>경북</option>
+      <option value="경남" ${curProvince==='경남'?'selected':''}>경남</option>
     </select>
     <input id="edit-지역시군" value="${curCity.replace(/"/g,'&quot;')}" placeholder="시/군 (예: 예천, 창녕)" style="${selStyle}flex:1;">
   </div>`;
