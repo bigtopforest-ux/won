@@ -1513,6 +1513,13 @@ function readSelectWithOther(fieldKey){
   return sel;
 }
 
+// 지금까지 입력된 현재거래처 값들을 모아서 자동완성 목록으로 제공 (새 값을 입력하면 다음부터 목록에 함께 나타남)
+function currentClientOptions(){
+  const set = new Set();
+  FARMS.forEach(f=>{ const v=(f.현재거래처||'').trim(); if(v) set.add(v); });
+  return [...set].sort((a,b)=>a.localeCompare(b,'ko'));
+}
+
 const BARN_TYPE_OPTIONS = ['올슬러리','반슬러리','스크레퍼','평사','톱밥','기타'];
 const VENT_TYPE_OPTIONS = ['무창돈사','윈치돈사','기타'];
 const GRADE_OPTIONS = ['S','A','B','C','D'];
@@ -1546,6 +1553,13 @@ function editFieldRowHtml(f, k){
       <option value="">선택안함</option>
       ${OWNER_OPTIONS.map(o=>`<option value="${o}" ${o===cur?'selected':''}>${o}</option>`).join('')}
     </select></div>`;
+  }
+  if(k==='현재거래처'){
+    const cur = f.현재거래처||'';
+    const opts = currentClientOptions();
+    return `<div class="kv"><div class="k">${FIELD_LABELS[k]}</div><input id="edit-현재거래처" list="current-client-options" placeholder="입력하거나 목록에서 선택" value="${cur.toString().replace(/"/g,'&quot;')}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">
+    <datalist id="current-client-options">${opts.map(o=>`<option value="${o.replace(/"/g,'&quot;')}"></option>`).join('')}</datalist>
+    </div>`;
   }
   return `
       <div class="kv"><div class="k">${FIELD_LABELS[k]}</div>
