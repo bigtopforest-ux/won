@@ -8188,17 +8188,21 @@ function cleanNotes(s, maxLines){
 }
 
 // 신규거래처 리스트를 담당자별로 정리한 엑셀 워크북 (참고 서식: 담당자/농장/농장주/사육규모/가능성/거래가능일자/진행상황)
-// 차수별 미팅사항 배열을 엑셀 한 셀에 넣기 좋은 여러 줄 텍스트로 변환 ("1차(날짜): 내용" 형태)
-function meetingLogExcelText(list){
-  const entries = Array.isArray(list) ? list : [];
-  if(!entries.length) return '';
-  return entries.map((m,i)=>`${i+1}차(${m.날짜||'-'}): ${(m.내용||'').toString().replace(/\n/g,' ')}`).join('\n');
+// 미팅 항목 하나를 엑셀 셀 텍스트로: 첫 줄에 날짜, 그 아래 줄에 내용
+function meetingRoundCellText(entry){
+  if(!entry) return { text:'-', lines:1 };
+  const contentInfo = cleanNotes(entry.내용, 4);
+  return { text: `${entry.날짜||'-'}\n${contentInfo.text||'-'}`, lines: contentInfo.lines+1 };
 }
 
 function buildFarmsWorkbook(XS, farms){
   const ws = {};
   const merges = [];
-  const headers = ['담당자','농장','농장주','지역','돈사형태','환기형태','사육규모','가능성','거래가능일자','상태','차수별 미팅사항','차주액션'];
+  const maxMeetings = farms.reduce((m,f)=>Math.max(m, Array.isArray(f.미팅이력)?f.미팅이력.length:0), 0);
+  const roundHeaders = Array.from({length:maxMeetings}, (_,i)=>`${i+1}차`);
+  const ROUND_COL_START = 10;
+  const headers = ['담당자','농장','농장주','지역','돈사형태','환기형태','사육규모','가능성','거래가능일자','상태', ...roundHeaders, '차주액션'];
+  const ACTION_COL = headers.length - 1;
   const NCOLS = headers.length;
   let r = 0;
 
@@ -8241,17 +8245,24 @@ function buildFarmsWorkbook(XS, farms){
     return (Number(b.가능성)||0) - (Number(a.가능성)||0);
   });
 
-  const NOTE_COLS = new Set([10, 11]); // 차수별 미팅사항·차주액션 — 자유서술이라 여러 줄일 수 있는 컬럼
+  // 차수별 미팅 컬럼(들)과 차주액션 — 자유서술이라 여러 줄일 수 있는 컬럼
+  const NOTE_COLS = new Set([...Array.from({length:maxMeetings}, (_,i)=>ROUND_COL_START+i), ACTION_COL]);
   let totalScale = 0;
   sorted.forEach((f, ri)=>{
     const alt = ri % 2 === 1;
     const status = normalizeStatus(f);
-    const meetingInfo = cleanNotes(meetingLogExcelText(f.미팅이력));
+    const meetings = Array.isArray(f.미팅이력) ? f.미팅이력 : [];
+    let maxRoundLines = 1;
+    const roundCells = Array.from({length:maxMeetings}, (_,i)=>{
+      const info = meetingRoundCellText(meetings[i]);
+      maxRoundLines = Math.max(maxRoundLines, info.lines);
+      return info.text;
+    });
     const actionInfo = cleanNotes(f.차주액션);
     const row = [
       f.담당자||'-', f.농가명||'-', f.농장주||'-', f.지역||'-',
       f.돈사형태||'-', f.환기형태||'-', fmtScale(f.규모), fmtProb(f.가능성),
-      f.거래가능일자||'-', status, meetingInfo.text || '-', actionInfo.text || '-',
+      f.거래가능일자||'-', status, ...roundCells, actionInfo.text || '-',
     ];
     totalScale += Number(f.규모)||0;
     row.forEach((v,c)=>{
@@ -8263,7 +8274,7 @@ function buildFarmsWorkbook(XS, farms){
         alignment:{vertical:'top', horizontal: isNote?'left':'center', indent:isNote?1:0, wrapText:isNote},
       });
     });
-    const lineCount = Math.max(1, meetingInfo.lines, actionInfo.lines);
+    const lineCount = Math.max(1, maxRoundLines, actionInfo.lines);
     ws['!rows'][r] = { hpt: Math.min(14*lineCount + 8, 110) };
     r++;
   });
@@ -8285,7 +8296,11 @@ function buildFarmsWorkbook(XS, farms){
 
   ws['!ref'] = XS.utils.encode_range({s:{r:0,c:0}, e:{r:r, c:NCOLS-1}});
   ws['!merges'] = merges;
-  ws['!cols'] = [ {wch:10}, {wch:18}, {wch:10}, {wch:10}, {wch:12}, {wch:12}, {wch:10}, {wch:9}, {wch:12}, {wch:9}, {wch:42}, {wch:42} ];
+  ws['!cols'] = [
+    {wch:10}, {wch:18}, {wch:10}, {wch:10}, {wch:12}, {wch:12}, {wch:10}, {wch:9}, {wch:12}, {wch:9},
+    ...Array.from({length:maxMeetings}, ()=>({wch:26})),
+    {wch:42},
+  ];
   return ws;
 }
 
