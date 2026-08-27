@@ -1272,7 +1272,8 @@ function meetingLogListHtml(f){
 function meetingLogEditHtml(f){
   const entries = meetingLogEntriesDesc(f.미팅이력);
   const rows = entries.length ? entries.map(m=>meetingLogEditRowHtml(f.id,m,'edit')).join('') : '<div style="font-size:12.5px;color:var(--muted);">등록된 미팅 이력이 없습니다</div>';
-  return `<div class="kv"><div class="k">차수별 미팅사항</div><div>
+  return `<div class="kv"><div class="k">${FIELD_LABELS.접촉단계}</div><div style="font-size:13px;">${stageFromMeetingCount(entries.length) || '미정'} <span style="font-size:11px;color:var(--muted);">(차수별 미팅사항 기준 자동 입력)</span></div></div>
+  <div class="kv"><div class="k">차수별 미팅사항</div><div>
     ${rows}
     <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:flex-start;">
       <input type="date" id="meeting-log-date" value="${localDateStr(new Date())}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">
@@ -1374,23 +1375,24 @@ function meetingLogDraftRowHtml(m){
 function meetingLogDraftHtml(){
   const entries = meetingLogEntriesDesc(newFarmMeetingLog);
   const rows = entries.length ? entries.map(meetingLogDraftRowHtml).join('') : '<div style="font-size:12.5px;color:var(--muted);">등록된 미팅 이력이 없습니다</div>';
-  return `<div class="kv" id="meeting-log-draft-box"><div class="k">차수별 미팅사항</div><div>
-    ${rows}
-    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:flex-start;">
-      <input type="date" id="meeting-log-date" value="${localDateStr(new Date())}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">
-      <textarea id="meeting-log-text" rows="2" placeholder="이번 차수 진행사항을 입력하세요" style="flex:1;min-width:160px;border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;"></textarea>
-      <button type="button" class="tab-btn active" onclick="addMeetingLogDraft()">+ 추가</button>
-    </div>
-    <span class="upload-status" id="meeting-log-status"></span>
-  </div></div>`;
+  return `<div id="meeting-log-draft-box">
+    <div class="kv"><div class="k">${FIELD_LABELS.접촉단계}</div><div style="font-size:13px;">${stageFromMeetingCount(entries.length) || '미정'} <span style="font-size:11px;color:var(--muted);">(차수별 미팅사항 기준 자동 입력)</span></div></div>
+    <div class="kv"><div class="k">차수별 미팅사항</div><div>
+      ${rows}
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:flex-start;">
+        <input type="date" id="meeting-log-date" value="${localDateStr(new Date())}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">
+        <textarea id="meeting-log-text" rows="2" placeholder="이번 차수 진행사항을 입력하세요" style="flex:1;min-width:160px;border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;"></textarea>
+        <button type="button" class="tab-btn active" onclick="addMeetingLogDraft()">+ 추가</button>
+      </div>
+      <span class="upload-status" id="meeting-log-status"></span>
+    </div></div>
+  </div>`;
 }
 
 function deleteMeetingLogDraftRow(idx){
   newFarmMeetingLog.splice(idx,1);
   const box = document.getElementById('meeting-log-draft-box');
   if(box) box.outerHTML = meetingLogDraftHtml();
-  const stageEl = document.getElementById('edit-접촉단계');
-  if(stageEl) stageEl.value = stageFromMeetingCount(newFarmMeetingLog.length);
 }
 
 function addMeetingLogDraft(){
@@ -1407,8 +1409,6 @@ function addMeetingLogDraft(){
   // 다른 입력 필드(농가명 등)에 이미 입력해둔 값이 사라지지 않도록 이 블록만 갱신
   const box = document.getElementById('meeting-log-draft-box');
   if(box) box.outerHTML = meetingLogDraftHtml();
-  const stageEl = document.getElementById('edit-접촉단계');
-  if(stageEl) stageEl.value = stageFromMeetingCount(newFarmMeetingLog.length);
 }
 
 function renderModalView(f){
@@ -1549,7 +1549,7 @@ function editFieldRowHtml(f, k){
   }
   return `
       <div class="kv"><div class="k">${FIELD_LABELS[k]}</div>
-      ${k==='접촉단계'||k==='사양가니즈'||k==='차주액션'
+      ${k==='사양가니즈'||k==='차주액션'
         ? `<textarea id="edit-${k}" rows="2" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;">${(f[k]||'').toString()}</textarea>`
         : k==='가능성'
           ? `<input id="edit-가능성" type="number" min="0" max="100" step="1" placeholder="0~100" value="${f.가능성===null||f.가능성===undefined||f.가능성===''?'':Math.round(Number(f.가능성)*100)}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">`
@@ -1561,7 +1561,7 @@ function editFieldRowHtml(f, k){
 function renderModalEdit(id){
   const f = FARMS.find(x=>x.id===id);
   const modal = document.getElementById('modal');
-  const fieldsA = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','환기형태','현재거래처','가능성','등급','대여금유무','사양가니즈','접촉단계'];
+  const fieldsA = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','환기형태','현재거래처','가능성','등급','대여금유무','사양가니즈'];
   const fieldsB = ['차주액션'];
   modal.innerHTML = `
     <button class="close-btn" onclick="closeModal()">&times;</button>
@@ -1612,7 +1612,7 @@ function readRegionInput(){
 
 async function saveEdit(id){
   const updates = { 농가명: document.getElementById('edit-농가명').value };
-  ['담당자','농장주','규모','현재거래처','접촉단계','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
+  ['담당자','농장주','규모','현재거래처','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
     updates[k] = document.getElementById('edit-'+k).value;
   });
   Object.assign(updates, readDealDateInputs());
@@ -1653,7 +1653,7 @@ async function deleteFarm(id){
 function openAddModal(){
   const modal = document.getElementById('modal');
   newFarmMeetingLog = [];
-  const fieldsA = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','환기형태','현재거래처','가능성','등급','대여금유무','사양가니즈','접촉단계'];
+  const fieldsA = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','환기형태','현재거래처','가능성','등급','대여금유무','사양가니즈'];
   const fieldsB = ['차주액션'];
   modal.innerHTML = `
     <button class="close-btn" onclick="closeModal()">&times;</button>
@@ -1678,7 +1678,7 @@ function openAddModal(){
 
 async function saveNew(){
   const updates = { 농가명: document.getElementById('edit-농가명').value };
-  ['담당자','농장주','규모','현재거래처','접촉단계','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
+  ['담당자','농장주','규모','현재거래처','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
     updates[k] = document.getElementById('edit-'+k).value;
   });
   Object.assign(updates, readDealDateInputs());
@@ -1689,6 +1689,7 @@ async function saveNew(){
   updates['가능성'] = probRaw === '' ? null : parseFloat(probRaw)/100;
   updates['상태'] = document.getElementById('edit-상태').value;
   updates['미팅이력'] = newFarmMeetingLog;
+  updates['접촉단계'] = stageFromMeetingCount(newFarmMeetingLog.length);
   const editor = '';
   const errBox = document.getElementById('edit-error');
   if(!updates['농가명']){
