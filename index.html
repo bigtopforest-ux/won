@@ -1023,6 +1023,12 @@ function fmtScale(v){
   return (isNaN(n) ? v : n.toLocaleString('ko-KR')) + '두';
 }
 
+// 기존에 4자리 년도로 저장된 값도 화면에는 "26년"처럼 두 자리로 짧게 표시
+function fmtDealDate(s){
+  if(!s) return '-';
+  return String(s).replace(/(\d{4})년/, (m, y) => y.slice(-2) + '년');
+}
+
 const DEAL_PART_RANK = {초:1, 중:2, 말:3};
 // 거래가능일자 정렬용 키: 년/월/시기(초·중·말)를 하나의 비교 가능한 숫자로 합침. 미입력(미정)은 0으로 취급.
 function dealDateSortKey(f){
@@ -1178,7 +1184,7 @@ function renderTable(){
           <div class="farm-card-stat"><b>${f.담당자||'-'}</b><span class="stat-label">담당자</span></div>
           <div class="farm-card-stat"><b>${f.지역||'-'}</b><span class="stat-label">지역</span></div>
           <div class="farm-card-stat"><b>${fmtScale(f.규모)}</b><span class="stat-label">규모</span></div>
-          <div class="farm-card-stat"><b>${f.거래가능일자||'-'}</b><span class="stat-label">거래가능일자</span></div>
+          <div class="farm-card-stat"><b>${fmtDealDate(f.거래가능일자)}</b><span class="stat-label">거래가능일자</span></div>
           <div class="farm-card-stat"><b>${f.접촉단계||'-'}</b><span class="stat-label">단계</span></div>
           <div class="farm-card-stat"><b>${fmtProb(f.가능성)}</b><span class="stat-label">가능성</span></div>
           <div class="farm-card-stat"><b class="grade">${f.등급||'-'}</b><span class="stat-label">등급 · ${f.최근업데이트}</span></div>
@@ -1406,7 +1412,7 @@ function renderModalView(f){
     <div class="kv"><div class="k">현재 거래처</div><div>${f.현재거래처||'-'}</div></div>
     <div class="kv"><div class="k">접촉단계</div><div>${f.접촉단계||'-'}</div></div>
     <div class="kv"><div class="k">가능성</div><div>${fmtProb(f.가능성)}</div></div>
-    <div class="kv"><div class="k">거래가능일자</div><div>${f.거래가능일자||'-'}</div></div>
+    <div class="kv"><div class="k">거래가능일자</div><div>${fmtDealDate(f.거래가능일자)}</div></div>
     <div class="kv"><div class="k">등급</div><div>${f.등급||'-'}</div></div>
     <div class="kv"><div class="k">대여금</div><div>${f.대여금유무||'-'}</div></div>
     <div class="kv"><div class="k">니즈/거래조건/메모</div><div>${(f.사양가니즈||'-').replace(/\n/g,'<br>')}</div></div>
@@ -8263,7 +8269,7 @@ function buildFarmsWorkbook(XS, farms){
     const row = [
       f.담당자||'-', f.농가명||'-', f.농장주||'-', f.지역||'-',
       f.돈사형태||'-', f.환기형태||'-', fmtScale(f.규모), fmtProb(f.가능성),
-      f.거래가능일자||'-', status, ...roundCells, actionInfo.text || '-',
+      fmtDealDate(f.거래가능일자), status, ...roundCells, actionInfo.text || '-',
     ];
     totalScale += Number(f.규모)||0;
     row.forEach((v,c)=>{
