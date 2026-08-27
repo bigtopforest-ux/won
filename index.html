@@ -1026,7 +1026,7 @@ function fmtScale(v){
 const DEAL_PART_RANK = {초:1, 중:2, 말:3};
 // 거래가능일자 정렬용 키: 년/월/시기(초·중·말)를 하나의 비교 가능한 숫자로 합침. 미입력(미정)은 0으로 취급.
 function dealDateSortKey(f){
-  const y = Number(f.거래가능년)||0;
+  const y = Number(String(f.거래가능년||'').slice(-2))||0;
   const m = Number(f.거래가능월)||0;
   const p = DEAL_PART_RANK[f.거래가능시기] || 0;
   return y*1000 + m*10 + p;
@@ -1428,16 +1428,17 @@ function renderModalView(f){
 }
 
 function dealDateInputsHtml(f){
-  const curYear = f.거래가능년 || '';
+  // 표시/저장을 "26년"처럼 두 자리로 짧게: 기존에 4자리로 저장된 값도 뒤 2자리만 비교해서 그대로 선택되게 함
+  const curYear = f.거래가능년 ? String(f.거래가능년).slice(-2) : '';
   const curMonth = f.거래가능월 || '';
   const curPart = f.거래가능시기 || '';
   const baseYear = new Date().getFullYear();
-  const years = []; for(let y=baseYear-1; y<=baseYear+2; y++) years.push(y);
+  const years = []; for(let y=baseYear-1; y<=baseYear+2; y++) years.push(String(y).slice(-2));
   const selStyle = 'border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;';
   return `<div style="display:flex;gap:6px;">
     <select id="edit-거래가능년" style="${selStyle}flex:1;">
       <option value="">년도</option>
-      ${years.map(y=>`<option value="${y}" ${String(y)===String(curYear)?'selected':''}>${y}년</option>`).join('')}
+      ${years.map(y=>`<option value="${y}" ${y===curYear?'selected':''}>${y}년</option>`).join('')}
     </select>
     <select id="edit-거래가능월" style="${selStyle}flex:1;">
       <option value="">월</option>
