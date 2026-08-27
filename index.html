@@ -1231,6 +1231,14 @@ document.getElementById('modal-overlay').addEventListener('click', e=>{ if(e.tar
 
 // ---- 차수별 미팅사항 (날짜 있는 진행상황 로그, 계속 추가/수정/삭제되는 형태) ----
 // idx는 실제 저장 배열(f.미팅이력)에서의 위치 — 수정/삭제 시 이 위치를 그대로 사용
+// 미팅 차수(등록된 차수별 미팅사항 개수)에 맞춰 접촉단계를 자동으로 채워줌. classifyStage의 단계 분류 문구와 맞춤.
+function stageFromMeetingCount(n){
+  if(!n) return '';
+  if(n===1) return '1차미팅';
+  if(n===2) return '2차미팅';
+  return '3차미팅 이상';
+}
+
 function meetingLogEntriesDesc(list){
   return (Array.isArray(list) ? list : []).map((m,i)=>({...m, no:i+1, idx:i}));
 }
@@ -1290,7 +1298,7 @@ async function addMeetingLog(id){
   const history = (Array.isArray(f.미팅이력) ? f.미팅이력.slice() : []);
   history.push({ 날짜, 내용 });
   try{
-    const saved = await apiRequest('PUT', { id, updates: { 미팅이력: history } });
+    const saved = await apiRequest('PUT', { id, updates: { 미팅이력: history, 접촉단계: stageFromMeetingCount(history.length) } });
     const idx = FARMS.findIndex(x=>x.id===id);
     if(idx>-1) FARMS[idx] = saved;
     renderModalEdit(id);
@@ -1341,7 +1349,7 @@ async function deleteMeetingLogRow(farmId, idx, mode){
   const history = f.미팅이력.slice();
   history.splice(idx,1);
   try{
-    const saved = await apiRequest('PUT', { id: farmId, updates: { 미팅이력: history } });
+    const saved = await apiRequest('PUT', { id: farmId, updates: { 미팅이력: history, 접촉단계: stageFromMeetingCount(history.length) } });
     const fi = FARMS.findIndex(x=>x.id===farmId);
     if(fi>-1) FARMS[fi] = saved;
     if(mode==='view') renderModalView(FARMS.find(x=>x.id===farmId)); else renderModalEdit(farmId);
@@ -1381,6 +1389,8 @@ function deleteMeetingLogDraftRow(idx){
   newFarmMeetingLog.splice(idx,1);
   const box = document.getElementById('meeting-log-draft-box');
   if(box) box.outerHTML = meetingLogDraftHtml();
+  const stageEl = document.getElementById('edit-접촉단계');
+  if(stageEl) stageEl.value = stageFromMeetingCount(newFarmMeetingLog.length);
 }
 
 function addMeetingLogDraft(){
@@ -1397,6 +1407,8 @@ function addMeetingLogDraft(){
   // 다른 입력 필드(농가명 등)에 이미 입력해둔 값이 사라지지 않도록 이 블록만 갱신
   const box = document.getElementById('meeting-log-draft-box');
   if(box) box.outerHTML = meetingLogDraftHtml();
+  const stageEl = document.getElementById('edit-접촉단계');
+  if(stageEl) stageEl.value = stageFromMeetingCount(newFarmMeetingLog.length);
 }
 
 function renderModalView(f){
@@ -1410,12 +1422,12 @@ function renderModalView(f){
     <div class="kv"><div class="k">돈사형태</div><div>${f.돈사형태||'-'}</div></div>
     <div class="kv"><div class="k">환기형태</div><div>${f.환기형태||'-'}</div></div>
     <div class="kv"><div class="k">현재 거래처</div><div>${f.현재거래처||'-'}</div></div>
-    <div class="kv"><div class="k">접촉단계</div><div>${f.접촉단계||'-'}</div></div>
     <div class="kv"><div class="k">가능성</div><div>${fmtProb(f.가능성)}</div></div>
     <div class="kv"><div class="k">거래가능일자</div><div>${fmtDealDate(f.거래가능일자)}</div></div>
     <div class="kv"><div class="k">등급</div><div>${f.등급||'-'}</div></div>
     <div class="kv"><div class="k">대여금</div><div>${f.대여금유무||'-'}</div></div>
     <div class="kv"><div class="k">니즈/거래조건/메모</div><div>${(f.사양가니즈||'-').replace(/\n/g,'<br>')}</div></div>
+    <div class="kv"><div class="k">접촉단계</div><div>${f.접촉단계||'-'}</div></div>
     ${meetingLogListHtml(f)}
     <div class="kv"><div class="k">차주 액션</div><div>${(f.차주액션||'-').replace(/\n/g,'<br>')}</div></div>
     <div class="kv"><div class="k">최초등록</div><div>${f.최초등록}</div></div>
@@ -1549,7 +1561,7 @@ function editFieldRowHtml(f, k){
 function renderModalEdit(id){
   const f = FARMS.find(x=>x.id===id);
   const modal = document.getElementById('modal');
-  const fieldsA = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','환기형태','현재거래처','접촉단계','가능성','등급','대여금유무','사양가니즈'];
+  const fieldsA = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','환기형태','현재거래처','가능성','등급','대여금유무','사양가니즈','접촉단계'];
   const fieldsB = ['차주액션'];
   modal.innerHTML = `
     <button class="close-btn" onclick="closeModal()">&times;</button>
@@ -1641,7 +1653,7 @@ async function deleteFarm(id){
 function openAddModal(){
   const modal = document.getElementById('modal');
   newFarmMeetingLog = [];
-  const fieldsA = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','환기형태','현재거래처','접촉단계','가능성','등급','대여금유무','사양가니즈'];
+  const fieldsA = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','환기형태','현재거래처','가능성','등급','대여금유무','사양가니즈','접촉단계'];
   const fieldsB = ['차주액션'];
   modal.innerHTML = `
     <button class="close-btn" onclick="closeModal()">&times;</button>
