@@ -966,7 +966,7 @@ function computeSummary(farms){
   });
   const stage_dist = {};
   farms.filter(f=>normalizeStatus(f)==='진행중').forEach(f=>{
-    const b = f.stage_bucket || classifyStage(f.접촉단계, normalizeStatus(f));
+    const b = classifyStage(stageFromMeetingCount((f.미팅이력||[]).length), normalizeStatus(f));
     stage_dist[b] = (stage_dist[b]||0)+1;
   });
   const owner_dist = {}, owner_active = {}, owner_drop = {}, owner_contract = {}, owner_scale = {};
@@ -1185,7 +1185,7 @@ function renderTable(){
           <div class="farm-card-stat"><b>${f.지역||'-'}</b><span class="stat-label">지역</span></div>
           <div class="farm-card-stat"><b>${fmtScale(f.규모)}</b><span class="stat-label">규모</span></div>
           <div class="farm-card-stat"><b>${fmtDealDate(f.거래가능일자)}</b><span class="stat-label">거래가능일자</span></div>
-          <div class="farm-card-stat"><b>${f.접촉단계||'-'}</b><span class="stat-label">단계</span></div>
+          <div class="farm-card-stat"><b>${stageFromMeetingCount((f.미팅이력||[]).length) || '-'}</b><span class="stat-label">단계</span></div>
           <div class="farm-card-stat"><b>${fmtProb(f.가능성)}</b><span class="stat-label">가능성</span></div>
           <div class="farm-card-stat"><b class="grade">${f.등급||'-'}</b><span class="stat-label">등급 · ${f.최근업데이트}</span></div>
           ${badge}
@@ -1427,7 +1427,7 @@ function renderModalView(f){
     <div class="kv"><div class="k">등급</div><div>${f.등급||'-'}</div></div>
     <div class="kv"><div class="k">대여금</div><div>${f.대여금유무||'-'}</div></div>
     <div class="kv"><div class="k">니즈/거래조건/메모</div><div>${(f.사양가니즈||'-').replace(/\n/g,'<br>')}</div></div>
-    <div class="kv"><div class="k">접촉단계</div><div>${f.접촉단계||'-'}</div></div>
+    <div class="kv"><div class="k">접촉단계</div><div>${stageFromMeetingCount((f.미팅이력||[]).length) || '-'}</div></div>
     ${meetingLogListHtml(f)}
     <div class="kv"><div class="k">차주 액션</div><div>${(f.차주액션||'-').replace(/\n/g,'<br>')}</div></div>
     <div class="kv"><div class="k">최초등록</div><div>${f.최초등록}</div></div>
