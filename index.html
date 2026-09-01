@@ -1217,7 +1217,7 @@ document.getElementById('search').addEventListener('input', renderTable);
 ['filterOwner','filterRegion','filterStage','filterGrade','farmsPageSize'].forEach(id=>document.getElementById(id).addEventListener('change', renderTable));
 
 const FIELD_LABELS = {
-  담당자:'담당자', 농장주:'농장주', 지역:'지역', 규모:'규모', 돈사형태:'돈사형태', 환기형태:'환기형태', 현재거래처:'현재 거래처', 접촉단계:'접촉단계',
+  담당자:'담당자', 농장주:'농장주', 연락처:'연락처', 지역:'지역', 규모:'규모', 돈사형태:'돈사형태', 환기형태:'환기형태', 현재거래처:'현재 거래처', 접촉단계:'접촉단계',
   가능성:'가능성(%)', 거래가능일자:'거래가능일자', 등급:'등급', 대여금유무:'대여금', 사양가니즈:'니즈/거래조건/메모', 차주액션:'차주 액션',
 };
 
@@ -1418,6 +1418,7 @@ function renderModalView(f){
     <h2>${f.농가명 || '(이름 없음)'}</h2>
     <div class="sub">${f.담당자||'-'} 담당 · ${f.지역||'-'} · ${normalizeStatus(f)}</div>
     <div class="kv"><div class="k">농장주</div><div>${f.농장주||'-'}</div></div>
+    <div class="kv"><div class="k">연락처</div><div>${f.연락처||'-'}</div></div>
     <div class="kv"><div class="k">규모</div><div>${fmtScale(f.규모)}</div></div>
     <div class="kv"><div class="k">돈사형태</div><div>${f.돈사형태||'-'}</div></div>
     <div class="kv"><div class="k">환기형태</div><div>${f.환기형태||'-'}</div></div>
@@ -1567,7 +1568,9 @@ function editFieldRowHtml(f, k){
         ? `<textarea id="edit-${k}" rows="2" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;">${(f[k]||'').toString()}</textarea>`
         : k==='가능성'
           ? `<input id="edit-가능성" type="number" min="0" max="100" step="1" placeholder="0~100" value="${f.가능성===null||f.가능성===undefined||f.가능성===''?'':Math.round(Number(f.가능성)*100)}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">`
-          : `<input id="edit-${k}" value="${(f[k]===null||f[k]===undefined?'':f[k]).toString().replace(/"/g,'&quot;')}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">`
+          : k==='연락처'
+            ? `<input id="edit-연락처" type="tel" placeholder="010-0000-0000" value="${(f.연락처||'').toString().replace(/"/g,'&quot;')}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">`
+            : `<input id="edit-${k}" value="${(f[k]===null||f[k]===undefined?'':f[k]).toString().replace(/"/g,'&quot;')}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">`
       }</div>
     `;
 }
@@ -1575,7 +1578,7 @@ function editFieldRowHtml(f, k){
 function renderModalEdit(id){
   const f = FARMS.find(x=>x.id===id);
   const modal = document.getElementById('modal');
-  const fieldsA = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','환기형태','현재거래처','가능성','등급','대여금유무','사양가니즈'];
+  const fieldsA = ['농장주','연락처','담당자','거래가능일자','지역','규모','돈사형태','환기형태','현재거래처','가능성','등급','대여금유무','사양가니즈'];
   const fieldsB = ['차주액션'];
   modal.innerHTML = `
     <button class="close-btn" onclick="closeModal()">&times;</button>
@@ -1626,7 +1629,7 @@ function readRegionInput(){
 
 async function saveEdit(id){
   const updates = { 농가명: document.getElementById('edit-농가명').value };
-  ['담당자','농장주','규모','현재거래처','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
+  ['담당자','농장주','연락처','규모','현재거래처','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
     updates[k] = document.getElementById('edit-'+k).value;
   });
   Object.assign(updates, readDealDateInputs());
@@ -1667,7 +1670,7 @@ async function deleteFarm(id){
 function openAddModal(){
   const modal = document.getElementById('modal');
   newFarmMeetingLog = [];
-  const fieldsA = ['농장주','담당자','거래가능일자','지역','규모','돈사형태','환기형태','현재거래처','가능성','등급','대여금유무','사양가니즈'];
+  const fieldsA = ['농장주','연락처','담당자','거래가능일자','지역','규모','돈사형태','환기형태','현재거래처','가능성','등급','대여금유무','사양가니즈'];
   const fieldsB = ['차주액션'];
   modal.innerHTML = `
     <button class="close-btn" onclick="closeModal()">&times;</button>
@@ -1692,7 +1695,7 @@ function openAddModal(){
 
 async function saveNew(){
   const updates = { 농가명: document.getElementById('edit-농가명').value };
-  ['담당자','농장주','규모','현재거래처','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
+  ['담당자','농장주','연락처','규모','현재거래처','등급','대여금유무','사양가니즈','차주액션'].forEach(k=>{
     updates[k] = document.getElementById('edit-'+k).value;
   });
   Object.assign(updates, readDealDateInputs());
