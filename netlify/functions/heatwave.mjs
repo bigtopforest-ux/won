@@ -143,6 +143,33 @@ export default async (req, context) => {
       return json({ ok: true });
     }
 
+    // 엑셀 일괄 업로드: 파일에 있는 농장은 신고내역을 통째로 교체(파일이 최신 전체 스냅샷이라는 전제),
+    // 파일에 없는 기존 농장은 건드리지 않음. 담당자/총괄표이미지는 기존 값 유지. 새 농장명이면 새로 생성.
+    if (action === "uploadIncidents") {
+      const { farms: uploadFarms } = body;
+      if (!Array.isArray(uploadFarms)) return json({ error: "farms array required" }, 400);
+      const data = await loadFarms(s);
+      let added = 0, updated = 0;
+      for (const uf of uploadFarms) {
+        const 농장명 = String(uf.농장명 || "").trim();
+        if (!농장명) continue;
+        const incidents = Array.isArray(uf.incidents)
+          ? uf.incidents.map((x) => ({ 날짜: String(x.날짜 || "").trim(), 두수: Number(x.두수) || 0, 동: String(x.동 || "").trim(), 등록자: editor || "", 등록시각: now }))
+          : [];
+        const idx = data.findIndex((f) => f.농장명 === 농장명);
+        if (idx > -1) {
+          data[idx] = { ...data[idx], 신고내역: incidents, 최근수정자: editor || "", 최근수정시각: now };
+          updated++;
+        } else {
+          const newId = data.length ? Math.max(...data.map((f) => f.id)) + 1 : 1;
+          data.push({ id: newId, 농장명, 담당자: "", 신고내역: incidents, 총괄표이미지: null, 등록자: editor || "", 등록시각: now });
+          added++;
+        }
+      }
+      await s.setJSON(KEY, data);
+      return json({ ok: true, added, updated, farms: data });
+    }
+
     if (action === "addIncident") {
       const { id, 날짜, 두수, 동 } = body;
       if (!날짜 || !두수) return json({ error: "날짜, 두수 required" }, 400);

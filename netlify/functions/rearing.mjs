@@ -5,6 +5,7 @@ const GROUPS_KEY = "groups";
 const MORTALITY_KEY = "mortality";
 const SNAPSHOTS_KEY = "snapshots";
 const FARM_MANAGERS_KEY = "farm-managers";
+const PIGLET_SOURCE_KEY = "piglet-source-overrides";
 const DIAGNOSIS_IMAGE_STORE_NAME = "rearing-diagnosis-images";
 const FOCUS_LOG_IMAGE_STORE_NAME = "rearing-focus-log-images";
 
@@ -52,6 +53,12 @@ async function loadSnapshots(s) {
 // 사육그룹은 그룹 단위지만 담당자는 농장 단위 속성이라 그룹 레코드와 분리된 별도 맵({농장명: 담당자})으로 관리
 async function loadFarmManagers(s) {
   const data = await s.get(FARM_MANAGERS_KEY, { type: "json" });
+  return data || {};
+}
+
+// 비육농장의 '자돈농장명' 텍스트 자동매칭이 안 되는 경우를 위한 수동 지정 맵({비육농장명: 자돈농장/전입처명})
+async function loadPigletSourceOverrides(s) {
+  const data = await s.get(PIGLET_SOURCE_KEY, { type: "json" });
   return data || {};
 }
 
@@ -109,8 +116,8 @@ export default async (req, context) => {
         headers: { "content-type": contentType, "cache-control": "public, max-age=31536000, immutable" },
       });
     }
-    const [groups, mortality, snapshots, farmManagers] = await Promise.all([loadGroups(s), loadMortality(s), loadSnapshots(s), loadFarmManagers(s)]);
-    return json({ groups, mortality, snapshots, farmManagers });
+    const [groups, mortality, snapshots, farmManagers, pigletSourceOverrides] = await Promise.all([loadGroups(s), loadMortality(s), loadSnapshots(s), loadFarmManagers(s), loadPigletSourceOverrides(s)]);
+    return json({ groups, mortality, snapshots, farmManagers, pigletSourceOverrides });
   }
 
   if (req.method === "POST") {
@@ -171,6 +178,16 @@ export default async (req, context) => {
       else delete managers[농장명];
       await s.setJSON(FARM_MANAGERS_KEY, managers);
       return json({ ok: true, farmManagers: managers });
+    }
+
+    if (action === "setPigletSource") {
+      const { 농장명, 자돈농장 } = body;
+      if (!농장명) return json({ error: "농장명 required" }, 400);
+      const overrides = await loadPigletSourceOverrides(s);
+      if (자돈농장 && String(자돈농장).trim()) overrides[농장명] = String(자돈농장).trim();
+      else delete overrides[농장명];
+      await s.setJSON(PIGLET_SOURCE_KEY, overrides);
+      return json({ ok: true, pigletSourceOverrides: overrides });
     }
 
     if (action === "clearGroups") {

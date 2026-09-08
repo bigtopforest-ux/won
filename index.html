@@ -371,6 +371,19 @@
 
   <div class="section-title">폭염 관리</div>
   <p style="font-size:12px;color:var(--muted);margin:2px 0 10px;">농장별 폭염 관련 신고내역(일자·두수·동)을 관리하고, 담당자와 총괄표 이미지를 등록할 수 있어요. 농장 카드를 클릭하면 상세 내역이 펼쳐집니다.</p>
+  <div class="upload-box" id="heatwave-upload-dropzone">
+    <div class="upload-box-head">
+      <strong><svg class="upload-icon" viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13.2V4M6.3 7.6 10 4l3.7 3.6"/><path d="M4 14.6v1.1c0 .7.6 1.3 1.3 1.3h9.4c.7 0 1.3-.6 1.3-1.3v-1.1"/></svg> 폭염신고 현황 엑셀 업로드</strong>
+      <button type="button" class="upload-info-btn" onclick="toggleUploadInfo(this)">?</button>
+    </div>
+    <div class="upload-info-panel">"OO년 농장별 일자별 폭염신고 현황" 파일의 "Sheet1"(상세 신고내역) 형식 그대로 올리면 됩니다 — 농장명이 병합된 헤더 아래 일자·두수·동 컬럼이 있는 양식이에요. 파일에 있는 농장은 신고내역이 통째로 교체되고(파일이 최신 전체 내역이라는 전제), 파일에 없는 기존 농장은 그대로 유지됩니다. 파일을 이 박스로 끌어다 놓아도 됩니다.</div>
+    <div class="upload-box-row">
+      <input type="file" id="heatwave-excel-file" accept=".xlsx,.xls">
+      <input type="text" id="heatwave-editor" placeholder="등록자 이름" style="border:1px solid #e2e8e4;border-radius:8px;padding:8px 10px;font-size:13px;width:120px;">
+      <button class="tab-btn active" onclick="uploadHeatwaveExcel()">업로드</button>
+      <span class="upload-status" id="heatwave-excel-status"></span>
+    </div>
+  </div>
   <div class="kpi-row" id="heatwave-kpi-row"></div>
 
   <div style="margin-bottom:10px;display:flex;gap:8px;">
@@ -5053,6 +5066,7 @@ let REARING_GROUPS = [];
 let REARING_MORTALITY = [];
 let REARING_SNAPSHOTS = [];
 let FARM_MANAGERS = {};
+let PIGLET_SOURCE_OVERRIDES = {};
 let rearingLoaded = false;
 
 async function loadRearingFromAPI(){
@@ -5064,8 +5078,23 @@ async function loadRearingFromAPI(){
       REARING_MORTALITY = data.mortality || [];
       REARING_SNAPSHOTS = data.snapshots || [];
       FARM_MANAGERS = data.farmManagers || {};
+      PIGLET_SOURCE_OVERRIDES = data.pigletSourceOverrides || {};
     }
   }catch(e){ console.warn('사육현황 로드 실패', e); }
+}
+
+async function savePigletSource(farm, 자돈농장){
+  const prev = PIGLET_SOURCE_OVERRIDES[farm] || '';
+  PIGLET_SOURCE_OVERRIDES[farm] = 자돈농장;
+  try{
+    await rearingApiRequest({ action:'setPigletSource', 농장명: farm, 자돈농장 });
+    renderRearingAll();
+    renderReportAll();
+  }catch(e){
+    PIGLET_SOURCE_OVERRIDES[farm] = prev;
+    alert('자돈농장 매칭 저장 실패: ' + e.message);
+    renderRearingAll();
+  }
 }
 
 async function saveFarmManager(farm, 담당자){
@@ -5445,6 +5474,7 @@ function wireRearingDropzone(zoneId, fileInputId){
 }
 wireRearingDropzone('rearing-groups-dropzone','rearing-groups-file');
 wireRearingDropzone('rearing-mortality-dropzone','rearing-mortality-file');
+wireRearingDropzone('heatwave-upload-dropzone','heatwave-excel-file');
 
 // 폐사 KPI를 "두수 (비율%)" 형태로 함께 표기하기 위한 공용 포맷터
 function deadCountWithRate(deadCount, denom){
@@ -5472,25 +5502,39 @@ function shortenPigletFarmLabel(raw){
 // 자돈농장별 1개월(전입 후 30일) 이내 폐사비율 + 연결된 비육농장(사육그룹의 '자돈농장명' 필드로 매칭)
 let pigletMortExpanded = {};
 
-function linkedBiyukFarmsFor(biyukGroups, farm, coreName){
-  const linked = farm==='(농장명 없음)' ? [] : biyukGroups.filter(g=>{
-    const src = String(g.자돈농장명||'').trim();
-    if(!src) return false;
-    return src===farm.trim() || (coreName.length>=2 && src.includes(coreName));
-  });
+// 비육그룹 하나하나를 정확히 한 곳(소스 라벨 하나 또는 미매칭)에만 귀속시킨다.
+// 예전 버전은 "농장명이 어딘가에 걸리면 그 농장 전체를 매칭됨 처리"했는데, 한 농장이 여러 그룹을 갖고
+// 그중 일부만 자돈농장명이 채워진 경우 나머지 그룹의 두수가 어디에도 집계되지 않고 통째로 누락되는
+// 버그가 있었음(비육 종합현황 두수와 여기 합계가 안 맞는 원인) — 그룹 단위로 바꿔서 전수 집계되게 함.
+function resolvePigletGroupSource(g, byPigletFarm){
+  const bf = g.농장명 || '(농장명 없음)';
+  const override = PIGLET_SOURCE_OVERRIDES[bf];
+  if(override) return override;
+  const src = String(g.자돈농장명||'').trim();
+  if(!src) return null;
+  for(const realFarm of Object.keys(byPigletFarm)){
+    const core = realFarm.replace(/^자돈_/, '').trim();
+    if(core.length>=2 && src.includes(core)) return realFarm;
+  }
+  return shortenPigletFarmLabel(src);
+}
+
+function buildLinkedFarms(groups){
   const byBiyukFarm = {};
-  linked.forEach(g=>{
+  groups.forEach(g=>{
     const bf = g.농장명 || '(농장명 없음)';
     (byBiyukFarm[bf] = byBiyukFarm[bf]||[]).push(g);
   });
-  return { linked, linkedFarms: Object.keys(byBiyukFarm).map(bf=>{
+  return Object.keys(byBiyukFarm).map(bf=>{
     const bgroups = byBiyukFarm[bf];
     const bIn = bgroups.reduce((s,g)=>s+(Number(g.전입두수)||0),0);
     const bDead = bgroups.reduce((s,g)=>s+computeEarly30Count(g),0);
-    return { farm: bf, 현재고: bgroups.reduce((s,g)=>s+(Number(g.현재고)||0),0), early30Dead: bDead, rate: bIn ? (bDead/bIn*100) : 0, groupCount: bgroups.length };
-  }) };
+    return { farm: bf, totalIn: bIn, 현재고: bgroups.reduce((s,g)=>s+(Number(g.현재고)||0),0), early30Dead: bDead, rate: bIn ? (bDead/bIn*100) : 0, groupCount: bgroups.length };
+  });
 }
 
+// 반환값: { sources: [자돈농장/전입처 카드 배열], unmatchedFarms: [매칭 안 된 비육그룹을 농장별로 묶은 배열] }
+// 같은 농장이 sources 한 군데의 linkedFarms와 unmatchedFarms에 동시에 나올 수 있음(그 농장 그룹 중 일부만 매칭된 경우) - 정상 동작.
 function computePigletFarmMortality(){
   const activeGroups = REARING_GROUPS.filter(g=>g.상태==='사육중');
   const pigletGroups = activeGroups.filter(g=>(g.돼지구분||'').trim()==='자돈');
@@ -5501,47 +5545,54 @@ function computePigletFarmMortality(){
     const farm = g.농장명 || '(농장명 없음)';
     (byPigletFarm[farm] = byPigletFarm[farm]||[]).push(g);
   });
+  const matchedCoreNames = Object.keys(byPigletFarm).map(f=>f.replace(/^자돈_/, '').trim()).filter(c=>c.length>=2);
+  function isRealFarmLabel(label){
+    return Object.prototype.hasOwnProperty.call(byPigletFarm, label) || matchedCoreNames.some(core=>label.includes(core));
+  }
 
-  // 1) 우리 시스템에 자돈 사육그룹이 실제로 있는 농장(예: 자돈_루카) - 자체 폐사비율까지 계산됨
+  // 비육그룹을 각각 정확히 하나의 소스 라벨(또는 미매칭)로 분류
+  const bySourceLabel = {};
+  const unmatchedGroups = [];
+  biyukGroups.forEach(g=>{
+    const label = resolvePigletGroupSource(g, byPigletFarm);
+    if(label) (bySourceLabel[label] = bySourceLabel[label]||[]).push(g);
+    else unmatchedGroups.push(g);
+  });
+
+  // 1) 우리 시스템에 자돈 사육그룹이 실제로 있는 농장(예: 자돈_루카) - 카드 상단 수치는 아래 가상 카드와
+  //    동일하게 "연결된 비육농장 기준"으로 계산한다(자돈 단계 자체 성적이 아님). 그래야 이 섹션의 취지
+  //    ("자돈농장에서 넘어온 비육농장별 1개월 이내 폐사비율")와 합계(비육 현재고 합) 둘 다와 숫자가 일치한다.
+  //    자돈 단계 자체 성적은 사육현황 관리 탭의 별도 자돈 섹션에서 이미 볼 수 있음.
   const realFarms = Object.keys(byPigletFarm).map(farm=>{
-    const groups = byPigletFarm[farm];
+    const linkedGroups = bySourceLabel[farm] || [];
+    const totalIn = linkedGroups.reduce((s,g)=>s+(Number(g.전입두수)||0),0);
+    const early30Dead = linkedGroups.reduce((s,g)=>s+computeEarly30Count(g),0);
+    const rate = totalIn ? (early30Dead/totalIn*100) : 0;
+    const 현재고 = linkedGroups.reduce((s,g)=>s+(Number(g.현재고)||0),0);
+    const linkedFarms = buildLinkedFarms(linkedGroups);
+    return { farm, totalIn, early30Dead, rate, 현재고, linkedFarms, isVirtual:false };
+  });
+
+  // 2) 자체 자돈 사육그룹은 없지만(=우리가 자돈 단계를 직접 추적하지 않는 공급처) 비육그룹이 매칭된 다른
+  //    전입처들(예: 그린/장수GGP 등 외부 공급처, 또는 수동 지정한 새 이름)도 카드로 함께 보여준다.
+  //    자체 폐사비율은 낼 수 없지만(자돈 단계 데이터가 없음) 연결된 비육농장의 1개월 이내 폐사는 그대로 보여줄 수 있음.
+  const virtualLabels = Object.keys(bySourceLabel).filter(label=>!isRealFarmLabel(label));
+  const virtualFarms = virtualLabels.map(label=>{
+    const groups = bySourceLabel[label];
     const totalIn = groups.reduce((s,g)=>s+(Number(g.전입두수)||0),0);
     const early30Dead = groups.reduce((s,g)=>s+computeEarly30Count(g),0);
     const rate = totalIn ? (early30Dead/totalIn*100) : 0;
     const 현재고 = groups.reduce((s,g)=>s+(Number(g.현재고)||0),0);
-
-    // 실제 업로드 파일에서는 비육그룹의 '자돈농장명'이 자돈그룹의 농장명과 정확히 일치하지 않고
-    // "인티-루카농장(이미숙)"처럼 자돈농장 이름을 포함한 공급처 전체명으로 들어오는 경우가 많아,
-    // 정확히 일치하는 경우 + "자돈_" 접두어를 뗀 핵심명이 포함된 경우를 모두 연결로 인정한다.
-    const coreName = farm.replace(/^자돈_/, '').trim();
-    const { linkedFarms } = linkedBiyukFarmsFor(biyukGroups, farm, coreName);
-    return { farm, totalIn, early30Dead, rate, 현재고, linkedFarms, isVirtual:false };
-  });
-
-  // 2) 자체 자돈 사육그룹은 없지만(=우리가 자돈 단계를 직접 추적하지 않는 공급처) 비육그룹의 '자돈농장명'에는
-  //    등장하는 다른 전입처들(예: 그린/장수GGP 등 외부 공급처)도 카드로 함께 보여준다.
-  //    자체 폐사비율은 낼 수 없지만(자돈 단계 데이터가 없음) 연결된 비육농장의 1개월 이내 폐사는 그대로 보여줄 수 있음.
-  const matchedCoreNames = Object.keys(byPigletFarm).map(f=>f.replace(/^자돈_/, '').trim()).filter(c=>c.length>=2);
-  const virtualLabels = new Set();
-  biyukGroups.forEach(g=>{
-    const src = String(g.자돈농장명||'').trim();
-    if(!src) return;
-    const alreadyReal = matchedCoreNames.some(core=>src.includes(core));
-    if(alreadyReal) return;
-    virtualLabels.add(shortenPigletFarmLabel(src));
-  });
-  const virtualFarms = [...virtualLabels].map(label=>{
-    // 자체 자돈 사육그룹이 없어 "자돈 단계" 수치는 낼 수 없지만, 연결된 비육농장들의 현재고·1개월 이내
-    // 폐사(전입 후 30일 기준)를 그대로 합산하면 이 공급처 전체의 요약 지표로 쓸 수 있어 그렇게 산출한다.
-    const { linked, linkedFarms } = linkedBiyukFarmsFor(biyukGroups, label, label);
-    const totalIn = linked.reduce((s,g)=>s+(Number(g.전입두수)||0),0);
-    const early30Dead = linked.reduce((s,g)=>s+computeEarly30Count(g),0);
-    const rate = totalIn ? (early30Dead/totalIn*100) : 0;
-    const 현재고 = linked.reduce((s,g)=>s+(Number(g.현재고)||0),0);
+    const linkedFarms = buildLinkedFarms(groups);
     return { farm: label, totalIn, early30Dead, rate, 현재고, linkedFarms, isVirtual:true };
   });
 
-  return [...realFarms, ...virtualFarms];
+  const sources = [...realFarms, ...virtualFarms];
+
+  // 3) 매칭 안 된 비육그룹들을 농장별로 묶음(농장의 다른 그룹이 이미 위에서 매칭됐어도, 매칭 안 된 그룹은 여기 별도로 잡힘)
+  const unmatchedFarms = buildLinkedFarms(unmatchedGroups);
+
+  return { sources, unmatchedFarms };
 }
 
 function togglePigletMortFarm(farm){
@@ -5575,15 +5626,75 @@ function renderPigletMortDetail(f){
   </div>`;
 }
 
+function onPigletSourceSelectChange(selectId, customId){
+  const sel = document.getElementById(selectId);
+  const custom = document.getElementById(customId);
+  if(!sel || !custom) return;
+  if(sel.value==='__custom__'){ custom.style.display='inline-block'; custom.focus(); }
+  else custom.style.display='none';
+}
+
+function savePigletSourceFromInputs(farm, selectId, customId){
+  const sel = document.getElementById(selectId);
+  const custom = document.getElementById(customId);
+  const value = (sel && sel.value==='__custom__') ? (custom ? custom.value.trim() : '') : (sel ? sel.value : '');
+  if(!value){ alert('자돈농장을 선택하거나 입력해주세요'); return; }
+  savePigletSource(farm, value);
+}
+
+function renderUnmatchedPigletFarmCard(f, knownLabels, containerId){
+  const safeFarm = f.farm.replace(/'/g,"\\'");
+  const domId = safeDomId(f.farm);
+  // 이 박스가 사육현황관리/종합보고 두 탭에 동시에(숨겨진 채로) 존재하므로 containerId를 id에 포함해
+  // getElementById가 지금 보고 있는 탭이 아닌 다른 탭의 동일 이름 요소를 잘못 집는 것을 방지한다.
+  const selectId = `piglet-src-select-${containerId}-${domId}`;
+  const customId = `piglet-src-custom-${containerId}-${domId}`;
+  return `<div class="farm-card" style="cursor:default;">
+    <div class="farm-card-top" style="grid-template-columns:minmax(120px,160px) minmax(80px,1fr) minmax(90px,1fr) 1fr;">
+      <div class="farm-card-name">${escapeHtml(f.farm)}</div>
+      <div class="farm-card-stat"><b>${f.현재고.toLocaleString('ko-KR')}두</b><span class="stat-label">현재고</span></div>
+      <div class="farm-card-stat${f.rate>=4?' stat-danger':''}"><b>${f.rate.toFixed(1)}%</b><span class="stat-label">1개월 이내 폐사율</span></div>
+      <div onclick="event.stopPropagation()" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+        <select id="${selectId}" onclick="event.stopPropagation()" onchange="onPigletSourceSelectChange('${selectId}','${customId}')" style="font-size:12px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;">
+          <option value="">자돈농장 선택</option>
+          ${knownLabels.map(l=>`<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join('')}
+          <option value="__custom__">직접 입력</option>
+        </select>
+        <input type="text" id="${customId}" placeholder="이름 입력" onclick="event.stopPropagation()" style="display:none;font-size:12px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;width:90px;">
+        <button class="tab-btn" onclick="savePigletSourceFromInputs('${safeFarm}','${selectId}','${customId}')">매칭 저장</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderPigletTotalRow(sources, unmatchedFarms){
+  // 비육 종합현황 두수와 맞춰야 하므로 비육농장 쪽 집계(linkedFarms/unmatchedFarms)만 더한다.
+  // sources 상단의 현재고는 실제 자돈농장(예: 자돈_루카)의 경우 "자돈 단계" 두수라 비육 두수와 다른 모집단이라 합산에서 제외.
+  const all = [...sources.flatMap(s=>s.linkedFarms), ...unmatchedFarms];
+  const total현재고 = all.reduce((s,f)=>s+f.현재고,0);
+  const totalIn = all.reduce((s,f)=>s+(f.totalIn||0),0);
+  const totalDead = all.reduce((s,f)=>s+f.early30Dead,0);
+  const totalRate = totalIn ? (totalDead/totalIn*100) : 0;
+  return `<div class="farm-card" style="cursor:default;background:var(--total-bg);border-color:var(--total-border);">
+    <div class="farm-card-top" style="grid-template-columns:minmax(120px,160px) minmax(80px,1fr) minmax(90px,1fr) minmax(90px,1fr);">
+      <div class="farm-card-name" style="color:var(--total-text);">합계</div>
+      <div class="farm-card-stat"><b style="color:var(--total-text);">${total현재고.toLocaleString('ko-KR')}두</b><span class="stat-label">현재고</span></div>
+      <div class="farm-card-stat"><b style="color:var(--total-text);">${totalRate.toFixed(1)}%</b><span class="stat-label">1개월 이내 폐사율</span></div>
+      <div class="farm-card-stat"><b style="color:var(--total-text);">${totalDead.toLocaleString('ko-KR')}두</b><span class="stat-label">1개월 이내 폐사두수</span></div>
+    </div>
+  </div>`;
+}
+
 function renderPigletFarmMortalityBox(containerId){
   const box = document.getElementById(containerId);
   if(!box) return;
-  const data = computePigletFarmMortality().sort((a,b)=>(b.rate??-1)-(a.rate??-1));
-  if(!data.length){
+  const { sources, unmatchedFarms } = computePigletFarmMortality();
+  if(!sources.length && !unmatchedFarms.length){
     box.innerHTML = `<p style="color:var(--muted);font-size:13px;padding:10px 0;">사육중인 자돈농장 데이터가 없습니다.</p>`;
     return;
   }
-  box.innerHTML = data.map(f=>{
+  const data = sources.slice().sort((a,b)=>(b.rate??-1)-(a.rate??-1));
+  const sourceCards = data.map(f=>{
     const expanded = !!pigletMortExpanded[f.farm];
     const safeFarm = f.farm.replace(/'/g,"\\'");
     const mgrLine = `<div onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:4px;margin-top:3px;">
@@ -5603,6 +5714,15 @@ function renderPigletFarmMortalityBox(containerId){
       ${expanded ? renderPigletMortDetail(f) : ''}
     </div>`;
   }).join('');
+
+  const knownLabels = data.map(f=>f.farm);
+  const unmatchedSection = unmatchedFarms.length ? `
+    <div class="section-title" style="font-size:13px;margin-top:16px;">매칭 안된 농장 (${unmatchedFarms.length}개)</div>
+    <p style="font-size:11.5px;color:var(--muted);margin:2px 0 6px;">자돈농장명이 비어있거나 알려진 전입처와 매칭되지 않은 비육농장입니다. 자돈농장을 선택하거나 직접 입력해서 수동으로 연결할 수 있어요.</p>
+    ${unmatchedFarms.slice().sort((a,b)=>a.farm.localeCompare(b.farm,'ko')).map(f=>renderUnmatchedPigletFarmCard(f, knownLabels, containerId)).join('')}
+  ` : '';
+
+  box.innerHTML = sourceCards + unmatchedSection + `<div style="margin-top:12px;">${renderPigletTotalRow(sources, unmatchedFarms)}</div>`;
 }
 
 function renderRearingKPI(){
@@ -8170,11 +8290,26 @@ async function exportReportToExcel(evt){
       return { title:`집중관리 농가 - ${type.label}`, headers:['농장명','담당자','전입두수','현재고','판매두수','현재 육성률','사유'], rows };
     }).filter(section=>section.rows.length);
 
-    // ---- 자돈농장별 1개월 이내 폐사비율 ----
-    const pigletFarmRows = computePigletFarmMortality().sort((a,b)=>b.rate-a.rate).map(f=>[
-      f.farm, FARM_MANAGERS[f.farm]||'-', f.현재고.toLocaleString('ko-KR')+'두', f.rate.toFixed(1)+'%',
-      f.early30Dead.toLocaleString('ko-KR')+'두', f.linkedFarms.length+'개',
-    ]);
+    // ---- 자돈농장별 1개월 이내 폐사비율 (매칭 안된 농장 + 합계 포함) ----
+    const { sources: pigletSources, unmatchedFarms: pigletUnmatched } = computePigletFarmMortality();
+    const pigletFarmRows = [
+      ...pigletSources.slice().sort((a,b)=>b.rate-a.rate).map(f=>[
+        f.farm, FARM_MANAGERS[f.farm]||'-', f.현재고.toLocaleString('ko-KR')+'두', f.rate.toFixed(1)+'%',
+        f.early30Dead.toLocaleString('ko-KR')+'두', f.linkedFarms.length+'개',
+      ]),
+      ...pigletUnmatched.slice().sort((a,b)=>a.farm.localeCompare(b.farm,'ko')).map(f=>[
+        f.farm+' (매칭 안됨)', FARM_MANAGERS[f.farm]||'-', f.현재고.toLocaleString('ko-KR')+'두', f.rate.toFixed(1)+'%',
+        f.early30Dead.toLocaleString('ko-KR')+'두', '-',
+      ]),
+    ];
+    {
+      // 비육 종합현황 두수와 맞춰야 하므로 비육농장 쪽 집계(linkedFarms/미매칭)만 합산(자돈 단계 두수는 다른 모집단이라 제외)
+      const allPiglet = [...pigletSources.flatMap(s=>s.linkedFarms), ...pigletUnmatched];
+      const totalStock = allPiglet.reduce((s,f)=>s+f.현재고,0);
+      const totalIn = allPiglet.reduce((s,f)=>s+(f.totalIn||0),0);
+      const totalDead = allPiglet.reduce((s,f)=>s+f.early30Dead,0);
+      pigletFarmRows.push(['합계', '-', totalStock.toLocaleString('ko-KR')+'두', (totalIn?(totalDead/totalIn*100):0).toFixed(1)+'%', totalDead.toLocaleString('ko-KR')+'두', '-']);
+    }
 
     // ---- 월 누적 출하실적 (회사별) ----
     const breakdown = computeCompanyBreakdown(monthShipments);
@@ -8486,6 +8621,84 @@ async function loadHeatwaveFromAPI(){
 
 function heatwaveFarmTotal(f){
   return (f.신고내역||[]).reduce((sum,x)=>sum+(Number(x.두수)||0), 0);
+}
+
+// "OO년 농장별 일자별 폭염신고 현황" 파일의 "Sheet1" 형식 파서.
+// 1행: 농장명(병합 셀, 빈 칸은 왼쪽 값을 이어받음) / 2행: 일자·두수·동 서브헤더(농장에 따라 동이 없기도 함) / 3행부터: 신고 1건당 1행.
+// "계"(합계) 행이 섞여 있으면 두수가 2배로 부풀려지는 버그를 겪은 적이 있어 반드시 제외한다.
+async function parseHeatwaveExcelFile(file){
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, {type:'array'});
+  const sheetName = wb.SheetNames.includes('Sheet1') ? 'Sheet1' : wb.SheetNames[0];
+  const ws = wb.Sheets[sheetName];
+  const rows2d = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+  const rows2dText = XLSX.utils.sheet_to_json(ws, {header:1, raw:false, defval:null});
+  if(rows2d.length < 3) return [];
+
+  const farmRow = rows2d[0];
+  const subRow = rows2d[1].map(normalizeHeader);
+  let lastFarm = null;
+  const colFarm = farmRow.map(v=>{
+    const t = normalizeHeader(v);
+    if(t) lastFarm = t;
+    return lastFarm;
+  });
+
+  const farmCols = {};
+  colFarm.forEach((farm, i)=>{
+    if(!farm) return;
+    const sub = subRow[i];
+    if(!farmCols[farm]) farmCols[farm] = {};
+    if(sub==='일자') farmCols[farm].날짜Col = i;
+    else if(sub==='두수') farmCols[farm].두수Col = i;
+    else if(sub==='동') farmCols[farm].동Col = i;
+  });
+
+  const result = [];
+  Object.keys(farmCols).forEach(farm=>{
+    const cols = farmCols[farm];
+    if(cols.날짜Col===undefined || cols.두수Col===undefined) return;
+    const incidents = [];
+    for(let r=2; r<rows2d.length; r++){
+      const row = rows2d[r];
+      if(!row) continue;
+      const rowText = rows2dText[r] || [];
+      const 날짜Raw = row[cols.날짜Col];
+      if(날짜Raw===null || 날짜Raw===undefined || 날짜Raw==='') continue;
+      const 날짜 = String(rowText[cols.날짜Col] ?? 날짜Raw).trim();
+      if(['계','합계','total'].includes(날짜)) continue;
+      const 두수 = Number(row[cols.두수Col])||0;
+      if(!두수) continue;
+      const 동 = cols.동Col!==undefined ? String(row[cols.동Col]||'').trim() : '';
+      incidents.push({ 날짜, 두수, 동 });
+    }
+    if(incidents.length) result.push({ 농장명: farm, incidents });
+  });
+
+  return result;
+}
+
+async function uploadHeatwaveExcel(){
+  const input = document.getElementById('heatwave-excel-file');
+  const statusEl = document.getElementById('heatwave-excel-status');
+  const editor = document.getElementById('heatwave-editor').value.trim();
+  if(!input || !input.files.length){ if(statusEl) statusEl.textContent = '파일을 선택해주세요'; return; }
+  if(statusEl) statusEl.textContent = '분석 중...';
+  try{
+    const farms = await parseHeatwaveExcelFile(input.files[0]);
+    if(!farms.length){
+      if(statusEl) statusEl.textContent = '인식된 농장 데이터가 없습니다. 파일 양식을 확인해주세요.';
+      return;
+    }
+    if(statusEl) statusEl.textContent = '업로드 중...';
+    const result = await heatwaveApiRequest('POST', { action:'uploadIncidents', farms, editor });
+    HEATWAVE_FARMS = result.farms;
+    input.value = '';
+    if(statusEl) statusEl.textContent = `업로드 완료 (신규 ${result.added}개 · 갱신 ${result.updated}개 농장)`;
+    renderHeatwaveAll();
+  }catch(e){
+    if(statusEl) statusEl.textContent = '업로드 실패: ' + e.message;
+  }
 }
 
 function renderHeatwaveAll(){
