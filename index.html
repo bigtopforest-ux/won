@@ -2886,7 +2886,8 @@ function extractFarmNameFromFilename(filename){
   const base = filename.replace(/\.(xlsx|xls)$/i, '');
   const knownCompanies = ['약감포크','동아미트','이서푸드','영천','신선', ...Object.values(PLANT_COMPANY_ALIASES), ...Object.keys(PLANT_COMPANY_ALIASES)];
   const tokens = base.split(/\s+/).filter(Boolean).filter(t=>{
-    if(/^\d+\.?$/.test(t)) return false;
+    // 번호 칸이 "136-137."처럼 페이지 범위로 붙어 나오는 경우도 순수 숫자 토큰으로 취급해 제거
+    if(/^\d+(-\d+)?\.?$/.test(t)) return false;
     if(knownCompanies.some(c=>c && t.includes(c))) return false;
     return true;
   });
@@ -2905,15 +2906,23 @@ function detectShipmentTemplate(rows2d){
   return 'settlement';
 }
 
+// 한 셀에 "신청자명 : (주)팜스코(...) (출하자명 : 정세영(...))"처럼 라벨 여러 개가 괄호로 겹쳐 들어있는
+// 경우가 있어, 단순 split(':')[1]로는 엉뚱한 라벨의 값을 집어올 수 있음 — 찾는 라벨 바로 뒤의 ':'부터,
+// 다음 '(' 또는 ','가 나오기 전까지만 값으로 잘라낸다.
 function findLabeledValue(rows2d, label, maxRows){
   for(let r=0; r<(maxRows||10) && r<rows2d.length; r++){
     const row = rows2d[r]||[];
     for(const v of row){
       const s = String(v||'');
-      if(s.includes(label)){
-        const parts = s.split(':');
-        if(parts[1]) return parts[1].trim();
-      }
+      const labelIdx = s.indexOf(label);
+      if(labelIdx === -1) continue;
+      const colonIdx = s.indexOf(':', labelIdx);
+      if(colonIdx === -1) continue;
+      let value = s.slice(colonIdx+1);
+      const cut = value.search(/[(,]/);
+      if(cut > -1) value = value.slice(0, cut);
+      value = value.trim();
+      if(value) return value;
     }
   }
   return '';
@@ -2923,7 +2932,7 @@ function findLabeledValue(rows2d, label, maxRows){
 // 마리별 도체중·등급 정보만 제공됨. 지급율/정산액은 이후 직접 입력으로 보완 필요.
 function parseGradingReport(rows2d){
   const 농가명 = findLabeledValue(rows2d, '출하자명');
-  const 거래처 = findLabeledValue(rows2d, '작업장명');
+  let 거래처 = findLabeledValue(rows2d, '작업장명');
   const 도축일raw = findLabeledValue(rows2d, '판정일자') || findLabeledValue(rows2d, '도축일자');
   const 도축일 = excelSerialToDateStr(도축일raw);
 
@@ -2937,7 +2946,9 @@ function parseGradingReport(rows2d){
   if(headerRowIdx > -1){
     const header = (rows2d[headerRowIdx]||[]).map(v=>String(v||'').replace(/\s+/g,''));
     const idx = (label)=> header.findIndex(h=>h.includes(label));
-    const iNo=idx('순번'), iCarcassNo=idx('도체번호'), iSex=idx('성별'),
+    // 서식에 따라 "순번" 또는 "일련번호"로 표기됨
+    const iNo=idx('순번')>-1 ? idx('순번') : idx('일련번호');
+    const iPlant=idx('작업장명'), iCarcassNo=idx('도체번호'), iSex=idx('성별'),
           iCarcassWt=idx('도체중'), iBackfat=idx('등지방두께'), iFinalGrade=idx('최종등급');
     for(let r=headerRowIdx+1; r<rows2d.length; r++){
       const row = rows2d[r];
@@ -2952,6 +2963,8 @@ function parseGradingReport(rows2d){
         등지방두께: iBackfat>-1 ? (Number(row[iBackfat])||0) : 0,
         최종등급: iFinalGrade>-1 ? row[iFinalGrade] : '',
       });
+      // 상단 요약문에 "작업장명 : 값" 형태가 없는 서식(등급판정결과)이라 못 찾았으면, 상세표의 첫 값으로 대신함
+      if(!거래처 && iPlant>-1 && row[iPlant]) 거래처 = String(row[iPlant]).trim();
     }
   }
 
