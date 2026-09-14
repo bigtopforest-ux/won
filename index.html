@@ -4705,11 +4705,17 @@ function normalizeCompany(c){
 }
 
 // 계약조건 기반 예상 지급율(%) 계산 (거래처별 계약 기준):
-//  - 동아미트: 표준 77.3% / 등외 50%
-//  - 약감포크: 표준 77.3% / 등외 55%
+//  - 약감포크: 표준 77.5% / 등외 55% (생돈 입고시 105kg 미만·125kg 이상은 반품 또는 지급율 인하 대상이라
+//              계약서에 안내돼 있지만 구체적인 인하율은 명시돼 있지 않아 자동계산에는 반영하지 않음 — 해당
+//              구간 출하는 실제 정산서를 보고 직접입력(지급율직접)으로 반영해야 함)
+//  - 동아미트: 출하평체(총생체중/두수) 구간별 — 107kg이상 77.5%, 105~107kg미만 68%, 100~105kg미만 65%,
+//              95~100kg미만 63%, 90~95kg미만 60%, 90kg미만은 미정(null). 등외는 구간과 무관하게 50% 고정.
 //  - 이서푸드: 출하평체(총생체중/두수) 구간별 — 107kg이상 77.5%, 105~107kg미만 68%, 100~105kg미만 65%,
 //              95~100kg미만 63%, 90~95kg미만 60%, 90kg미만은 미정(null)
-//  - 영천/신선: 계약 공식 없음 — 직접입력(지급율직접)으로만 반영, 자동계산은 null
+//  - 영천: 출하평체(총생체중/두수) + 평균등지방두께로 구간을 정하고, 그 구간 안에서 암/거세 지급율이 다름
+//          (예: 113~118kg·등지방19~24mm → 암78.0%/거세76.0%). 마리별 성별로 나눠 도체중 가중평균하며,
+//          등외는 구간과 무관하게 50% 고정.
+//  - 신선: 계약 공식 없음 — 직접입력(지급율직접)으로만 반영, 자동계산은 null
 //  - 그 외(기타 등): 자동계산하지 않고 null 반환(표에는 '미정'으로 표시)
 
 // 등판서(등급판정서) 데이터가 실제로 등록됐는지 판단: 지육율/등급분포 중 하나라도 값이 있으면 등록된 것으로 봄
@@ -4741,6 +4747,28 @@ function iseoTierRate(출하평체){
   return null;
 }
 
+// 동아미트: 출하평체(kg) 구간별 지급율(%). 등외는 이 구간과 무관하게 별도로 50% 고정 처리됨(호출부 참고).
+function dongaTierRate(출하평체){
+  if(출하평체 >= 107) return 77.5;
+  if(출하평체 >= 105) return 68;
+  if(출하평체 >= 100) return 65;
+  if(출하평체 >= 95) return 63;
+  if(출하평체 >= 90) return 60;
+  return null;
+}
+
+// 영천: 출하평체(kg) + 평균등지방두께(mm) 구간별 지급율(%) — 성별(암/거세)에 따라 다름.
+// 구간이 좁고 이상적인 조합(예: 113~118kg·등지방19~24mm)일수록 높은 지급율, 그 밖으로 벗어날수록 낮아짐.
+// 등외는 이 구간과 무관하게 별도로 50% 고정 처리됨(호출부 참고).
+function yeongcheonTierRate(출하평체, 평균등지방, isFemale){
+  if(출하평체>=113 && 출하평체<118 && 평균등지방>=19 && 평균등지방<24) return isFemale?78.0:76.0;
+  if(출하평체>=110 && 출하평체<125 && 평균등지방>=17 && 평균등지방<26) return isFemale?76.5:74.5;
+  if(출하평체>=107 && 출하평체<132 && 평균등지방>=15 && 평균등지방<28) return isFemale?75.0:73.0;
+  if(출하평체>=107 && 출하평체<132) return isFemale?73.0:70.5;
+  if(출하평체>0) return isFemale?55.5:52.0;
+  return null;
+}
+
 function computeExpectedPayRate(shipment){
   // 직접입력으로 지급율을 명시했으면 그 값을 그대로 사용 (자동계산 없음)
   if(shipment.지급율직접!==null && shipment.지급율직접!==undefined && shipment.지급율직접!=='') return Number(shipment.지급율직접);
@@ -4757,10 +4785,39 @@ function computeExpectedPayRate(shipment){
     return iseoTierRate(총생체중/두수);
   }
 
+  if(company === '동아미트' || company === '영천'){
+    const 두수 = Number(shipment.두수)||0;
+    const 총생체중 = Number(shipment.총생체중)||0;
+    if(!두수 || !총생체중) return null;
+    const 출하평체 = 총생체중/두수;
+    const 평균등지방 = Number(shipment.평균등지방)||0;
+    const animals = shipment.animals;
+
+    if(!animals || !animals.length){
+      // 마리별 상세가 없으면(직접입력 등) 등외 구분 없이 배치 전체를 표준등급으로 가정
+      if(company==='동아미트') return dongaTierRate(출하평체);
+      // 영천은 암/거세 비율을 알 수 없어 두 지급율의 평균으로 근사
+      const female = yeongcheonTierRate(출하평체, 평균등지방, true);
+      const male = yeongcheonTierRate(출하평체, 평균등지방, false);
+      return (female!==null && male!==null) ? (female+male)/2 : null;
+    }
+
+    let sumW = 0, sumRateW = 0;
+    animals.forEach(a=>{
+      const w = Number(a.도체중) || 1;
+      const isOff = String(a.최종등급||'').trim()==='등외';
+      const rate = isOff ? 50
+        : company==='동아미트' ? dongaTierRate(출하평체)
+        : yeongcheonTierRate(출하평체, 평균등지방, String(a.성별||'').trim()==='암');
+      if(rate===null) return; // 구간을 못 정한 마리(90kg 미만 등)는 집계에서 제외
+      sumW += w; sumRateW += rate * w;
+    });
+    return sumW ? (sumRateW/sumW) : null;
+  }
+
   let standardRate, 등외Rate;
-  if(company === '동아미트'){ standardRate = 0.773; 등외Rate = 0.5; }
-  else if(company === '약감포크'){ standardRate = 0.773; 등외Rate = 0.55; }
-  else return null; // 영천/신선/기타 등은 계약 공식이 없어 직접입력으로만 반영
+  if(company === '약감포크'){ standardRate = 0.775; 등외Rate = 0.55; }
+  else return null; // 신선/기타 등은 계약 공식이 없어 직접입력으로만 반영
 
   const animals = shipment.animals;
   let result;
