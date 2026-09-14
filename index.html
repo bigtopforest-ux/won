@@ -2894,6 +2894,18 @@ function extractFarmNameFromFilename(filename){
   return tokens.join(' ').trim();
 }
 
+// 파일명 토큰 중 육가공업체(거래처)로 인식되는 게 있으면 선택칸 기본값으로 사용
+function extractCompanyFromFilename(filename){
+  if(!filename) return '';
+  const base = filename.replace(/\.(xlsx|xls)$/i, '');
+  const tokens = base.split(/\s+/).filter(Boolean);
+  for(const t of tokens){
+    const norm = normalizeCompany(t);
+    if(SHIP_COMPANY_LIST.includes(norm)) return norm;
+  }
+  return '';
+}
+
 function detectShipmentTemplate(rows2d){
   for(let r=0; r<10 && r<rows2d.length; r++){
     const row = rows2d[r]||[];
@@ -3235,6 +3247,9 @@ async function prepareShipmentUpload(){
     const farmFromFilename = extractFarmNameFromFilename(file.name);
     if(farmFromFilename) parsed.농가명 = farmFromFilename;
     if(PLANT_COMPANY_ALIASES[parsed.거래처]) parsed.거래처 = PLANT_COMPANY_ALIASES[parsed.거래처];
+    // 등급판정서의 '작업장명'(도축장)과 실제 지급 거래처(약감포크 등)는 다른 개념이라 자동 인식이 안 될 수 있어
+    // 파일명에서 거래처가 보이면 기본값으로 제안하고, 업로드하는 사람이 직접 선택/수정하게 함
+    const companyGuess = SHIP_COMPANY_LIST.includes(normalizeCompany(parsed.거래처)) ? normalizeCompany(parsed.거래처) : extractCompanyFromFilename(file.name);
 
     const existingMatch = findExistingShipment(parsed.농가명, parsed.도축일);
 
@@ -3275,6 +3290,14 @@ async function prepareShipmentUpload(){
       <div class="budget-card">
         <h4>${parsed.농가명} · ${parsed.도축일} · ${parsed.두수}두</h4>
         ${dupNote}
+        <div class="kv"><div class="k">육가공업체</div>
+          <select id="pending-거래처" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">
+            <option value="">선택안함</option>
+            ${SHIP_COMPANY_LIST.map(c=>`<option value="${c}" ${c===companyGuess?'selected':''}>${c}</option>`).join('')}
+            <option value="기타" ${companyGuess==='기타'?'selected':''}>기타</option>
+          </select>
+        </div>
+        <div class="upload-status" style="margin:6px 0;">${companyGuess ? `자동 매칭됨 (${companyGuess}) — 필요하면 변경 가능` : '실제 도축장(' + (parsed.거래처||'-') + ')과 지급 거래처가 다를 수 있어요. 직접 선택해주세요.'}</div>
         ${needsWeight ? `<div class="kv"><div class="k">총생체중(kg)</div><input id="pending-총생체중" type="number" placeholder="필수 입력" style="border:1px solid #B0281F;border-radius:6px;padding:6px 8px;font-size:13px;"></div><div class="upload-status" style="color:#B0281F;">⚠ 이 양식에는 총생체중 정보가 없습니다. 직접 입력해야 저장할 수 있어요.</div>` : ''}
         <div class="kv"><div class="k">지역부장</div>
           <select id="pending-지역부장" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">
@@ -3297,8 +3320,10 @@ async function confirmShipmentSave(){
   const statusEl = document.getElementById('shipment-excel-status');
   try{
     const sel = document.getElementById('pending-지역부장');
+    const companyEl = document.getElementById('pending-거래처');
     const weightEl = document.getElementById('pending-총생체중');
     const chosen = sel ? sel.value : '';
+    if(companyEl && companyEl.value) pendingShipmentRecord.거래처 = companyEl.value;
     if(!chosen){
       statusEl.textContent = '지역부장을 선택해야 저장할 수 있습니다.';
       return;
