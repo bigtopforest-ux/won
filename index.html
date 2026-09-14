@@ -2879,19 +2879,29 @@ function excelSerialToDateStr(v){
   return v ? String(v) : '';
 }
 
-// 파일명 패턴: "번호. 날짜 농가명 거래처 두수" (예: "20. 0601 민서 동아미트 41.xls")
-// 순수 숫자 토큰(번호/날짜/두수)과 거래처명을 제거하고 남는 단어를 농가명으로 사용
+// 파일명 패턴 두 가지를 지원:
+//  A) "번호. 날짜 농가명 거래처 두수" (예: "20. 0601 민서 동아미트 41.xls")
+//  B) "날짜 도축장_자돈공급처 농가명_두수" (예: "2026-08-07 삼세_인티분도 김진국_25.xlsx",
+//     재다운로드 시 끝에 "(1)" 같은 표시가 붙기도 함)
 function extractFarmNameFromFilename(filename){
   if(!filename) return '';
-  const base = filename.replace(/\.(xlsx|xls)$/i, '');
+  let base = filename.replace(/\.(xlsx|xls)$/i, '');
+  base = base.replace(/\s*\(\d+\)\s*$/, ''); // 같은 파일을 다시 받았을 때 붙는 "(1)" 같은 중복 표시 제거
   const knownCompanies = ['약감포크','동아미트','이서푸드','영천','신선', ...Object.values(PLANT_COMPANY_ALIASES), ...Object.keys(PLANT_COMPANY_ALIASES)];
-  const tokens = base.split(/\s+/).filter(Boolean).filter(t=>{
-    // 번호 칸이 "136-137."처럼 페이지 범위로 붙어 나오는 경우도 순수 숫자 토큰으로 취급해 제거
+  const tokens = base.split(/\s+/).filter(Boolean);
+
+  // 패턴 B: 마지막 토큰이 "농가명_두수" 형태면 두수 앞부분을 농가명으로 사용
+  const last = tokens[tokens.length-1] || '';
+  const underscoreMatch = last.match(/^(\D[^_]*)_(\d+)$/);
+  if(underscoreMatch) return underscoreMatch[1].trim();
+
+  // 패턴 A: 순수 숫자류(번호/날짜/두수, "136-137."처럼 페이지 범위인 경우 포함)와 거래처명 토큰을 제거하고 남는 단어를 농가명으로 사용
+  const filtered = tokens.filter(t=>{
     if(/^\d+(-\d+)?\.?$/.test(t)) return false;
     if(knownCompanies.some(c=>c && t.includes(c))) return false;
     return true;
   });
-  return tokens.join(' ').trim();
+  return filtered.join(' ').trim();
 }
 
 // 파일명 토큰 중 육가공업체(거래처)로 인식되는 게 있으면 선택칸 기본값으로 사용
@@ -2915,6 +2925,9 @@ function detectShipmentTemplate(rows2d){
       if(s.includes('등급판정결과') || s.includes('등급판정 결과')) return 'grading';
     }
   }
+  // 요약문 없이 마리별 상세표 한 장으로만 된 서식 — 첫 행에 농가명/도체번호/최종등급 컬럼이 나란히 있으면 이걸로 판단
+  const headerRow = (rows2d[0]||[]).map(v=>String(v||'').trim());
+  if(headerRow.includes('농가명') && headerRow.includes('도체번호') && headerRow.includes('최종등급')) return 'grading-flat';
   return 'settlement';
 }
 
@@ -2940,46 +2953,9 @@ function findLabeledValue(rows2d, label, maxRows){
   return '';
 }
 
-// '등급판정결과'(등급판정서) 양식 파싱 — 출하정산서와 달리 생체중/기준단가/정산정보가 없고
-// 마리별 도체중·등급 정보만 제공됨. 지급율/정산액은 이후 직접 입력으로 보완 필요.
-function parseGradingReport(rows2d){
-  const 농가명 = findLabeledValue(rows2d, '출하자명');
-  let 거래처 = findLabeledValue(rows2d, '작업장명');
-  const 도축일raw = findLabeledValue(rows2d, '판정일자') || findLabeledValue(rows2d, '도축일자');
-  const 도축일 = excelSerialToDateStr(도축일raw);
-
-  let headerRowIdx = -1;
-  for(let r=0; r<rows2d.length; r++){
-    const row = rows2d[r]||[];
-    if(row.some(v=> String(v||'').replace(/\s+/g,'').includes('도체번호'))){ headerRowIdx = r; break; }
-  }
-
-  const animals = [];
-  if(headerRowIdx > -1){
-    const header = (rows2d[headerRowIdx]||[]).map(v=>String(v||'').replace(/\s+/g,''));
-    const idx = (label)=> header.findIndex(h=>h.includes(label));
-    // 서식에 따라 "순번" 또는 "일련번호"로 표기됨
-    const iNo=idx('순번')>-1 ? idx('순번') : idx('일련번호');
-    const iPlant=idx('작업장명'), iCarcassNo=idx('도체번호'), iSex=idx('성별'),
-          iCarcassWt=idx('도체중'), iBackfat=idx('등지방두께'), iFinalGrade=idx('최종등급');
-    for(let r=headerRowIdx+1; r<rows2d.length; r++){
-      const row = rows2d[r];
-      if(!row) continue;
-      const noNum = Number(row[iNo]);
-      if(!row[iNo] || isNaN(noNum) || noNum < 1) continue;
-      animals.push({
-        순번: noNum,
-        도체번호: iCarcassNo>-1 ? row[iCarcassNo] : '',
-        성별: iSex>-1 ? row[iSex] : '',
-        도체중: iCarcassWt>-1 ? (Number(row[iCarcassWt])||0) : 0,
-        등지방두께: iBackfat>-1 ? (Number(row[iBackfat])||0) : 0,
-        최종등급: iFinalGrade>-1 ? row[iFinalGrade] : '',
-      });
-      // 상단 요약문에 "작업장명 : 값" 형태가 없는 서식(등급판정결과)이라 못 찾았으면, 상세표의 첫 값으로 대신함
-      if(!거래처 && iPlant>-1 && row[iPlant]) 거래처 = String(row[iPlant]).trim();
-    }
-  }
-
+// 등급판정서류 양식들의 공통 마무리 집계 (두수/등급분포/평균도체중/평균등지방) — 생체중/기준단가/정산정보가
+// 없는 양식들이라 지급율/정산액은 이후 직접 입력으로 보완 필요.
+function summarizeGradingAnimals(농가명, 거래처, 도축일, animals){
   const 두수 = animals.length;
   const 등급분포 = {'1+':0,'1':0,'2':0,'등외':0};
   animals.forEach(a=>{
@@ -2998,6 +2974,88 @@ function parseGradingReport(rows2d){
     animals,
     __missingPriceData: true,
   };
+}
+
+// "YYYYMMDD" 숫자로만 된 판정일(예: 20260807)을 "YYYY-MM-DD"로 변환
+function ymdNumToDateStr(v){
+  const s = String(v||'').trim();
+  const m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : '';
+}
+
+// '등급판정결과'(등급판정서) 양식 파싱 — 상단에 "1.등급판정결과 요약표 / 2.항목별 평균 / 3.세부내역" 순으로
+// 나오는 서식. 마리별 도체중·등급 정보만 제공됨.
+function parseGradingReport(rows2d){
+  let 농가명 = findLabeledValue(rows2d, '출하자명');
+  let 거래처 = findLabeledValue(rows2d, '작업장명');
+  const 도축일raw = findLabeledValue(rows2d, '판정일자') || findLabeledValue(rows2d, '도축일자');
+  const 도축일 = excelSerialToDateStr(도축일raw);
+
+  let headerRowIdx = -1;
+  for(let r=0; r<rows2d.length; r++){
+    const row = rows2d[r]||[];
+    if(row.some(v=> String(v||'').replace(/\s+/g,'').includes('도체번호'))){ headerRowIdx = r; break; }
+  }
+
+  const animals = [];
+  if(headerRowIdx > -1){
+    const header = (rows2d[headerRowIdx]||[]).map(v=>String(v||'').replace(/\s+/g,''));
+    const idx = (label)=> header.findIndex(h=>h.includes(label));
+    // 서식에 따라 "순번" 또는 "일련번호"로 표기됨
+    const iNo=idx('순번')>-1 ? idx('순번') : idx('일련번호');
+    const iPlant=idx('작업장명'), iShipper=idx('출하자'), iCarcassNo=idx('도체번호'), iSex=idx('성별'),
+          iCarcassWt=idx('도체중'), iBackfat=idx('등지방두께'), iFinalGrade=idx('최종등급');
+    for(let r=headerRowIdx+1; r<rows2d.length; r++){
+      const row = rows2d[r];
+      if(!row) continue;
+      const noNum = Number(row[iNo]);
+      if(!row[iNo] || isNaN(noNum) || noNum < 1) continue;
+      animals.push({
+        순번: noNum,
+        도체번호: iCarcassNo>-1 ? row[iCarcassNo] : '',
+        성별: iSex>-1 ? row[iSex] : '',
+        도체중: iCarcassWt>-1 ? (Number(row[iCarcassWt])||0) : 0,
+        등지방두께: iBackfat>-1 ? (Number(row[iBackfat])||0) : 0,
+        최종등급: iFinalGrade>-1 ? row[iFinalGrade] : '',
+      });
+      // 상단 요약문에 "작업장명 : 값" 형태가 없는 서식이라 못 찾았으면, 상세표의 첫 값으로 대신함
+      if(!거래처 && iPlant>-1 && row[iPlant]) 거래처 = String(row[iPlant]).trim();
+      // "신청자명"만 있고 "출하자명"은 없는 서식(신청자가 법인이라 출하자와 다른 경우)도 있어,
+      // 그런 경우엔 상세표의 "출하자" 컬럼(마리별로 실제 출하자 개인명이 들어있음)으로 대신함
+      if(!농가명 && iShipper>-1 && row[iShipper]) 농가명 = String(row[iShipper]).trim();
+    }
+  }
+
+  return summarizeGradingAnimals(농가명, 거래처, 도축일, animals);
+}
+
+// 요약문 없이 마리별 상세표 한 장으로만 된 서식(예: 도체등급 시스템 내보내기 파일) — 헤더 행에
+// 농가명/의뢰인/판정일/도체번호/...·최종등급 컬럼이 바로 나열돼 있음. 거래처(육가공업체) 정보는 없어서
+// 업로드 확인 화면에서 직접 선택해야 함.
+function parseGradingFlatReport(rows2d){
+  const header = (rows2d[0]||[]).map(v=>String(v||'').trim());
+  const idx = (label)=> header.findIndex(h=>h===label);
+  const iFarm=idx('농가명'), iDate=idx('판정일'), iCarcassNo=idx('도체번호'), iSex=idx('성별'),
+        iCarcassWt=idx('중량'), iBackfat=idx('등지방'), iFinalGrade=idx('최종등급');
+
+  const animals = [];
+  let 농가명 = '', 도축일 = '';
+  for(let r=1; r<rows2d.length; r++){
+    const row = rows2d[r];
+    if(!row || iFarm<0 || !row[iFarm]) continue;
+    if(!농가명) 농가명 = String(row[iFarm]).trim();
+    if(!도축일 && iDate>-1) 도축일 = ymdNumToDateStr(row[iDate]);
+    animals.push({
+      순번: animals.length+1,
+      도체번호: iCarcassNo>-1 ? row[iCarcassNo] : '',
+      성별: iSex>-1 ? row[iSex] : '',
+      도체중: iCarcassWt>-1 ? (Number(row[iCarcassWt])||0) : 0,
+      등지방두께: iBackfat>-1 ? (Number(row[iBackfat])||0) : 0,
+      최종등급: iFinalGrade>-1 ? row[iFinalGrade] : '',
+    });
+  }
+
+  return summarizeGradingAnimals(농가명, '', 도축일, animals);
 }
 
 function parseShipmentExcel(rows2d){
@@ -3238,12 +3296,14 @@ async function prepareShipmentUpload(){
     const ws = wb.Sheets[sheetName];
     const rows2d = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
     const template = detectShipmentTemplate(rows2d);
-    const parsed = template === 'grading' ? parseGradingReport(rows2d) : parseShipmentExcel(rows2d);
+    const parsed = template === 'grading' ? parseGradingReport(rows2d)
+      : template === 'grading-flat' ? parseGradingFlatReport(rows2d)
+      : parseShipmentExcel(rows2d);
     if(!parsed.농가명 || !parsed.두수){
       statusEl.textContent = '엑셀 서식을 인식하지 못했습니다. 양식을 확인해주세요.';
       return;
     }
-    parsed.등록방식 = template === 'grading' ? 'grading-excel' : 'excel';
+    parsed.등록방식 = template === 'settlement' ? 'excel' : 'grading-excel';
     const farmFromFilename = extractFarmNameFromFilename(file.name);
     if(farmFromFilename) parsed.농가명 = farmFromFilename;
     if(PLANT_COMPANY_ALIASES[parsed.거래처]) parsed.거래처 = PLANT_COMPANY_ALIASES[parsed.거래처];
