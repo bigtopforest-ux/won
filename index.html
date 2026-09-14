@@ -717,7 +717,7 @@
   <div id="rearing-month-box"></div>
 
   <div class="section-title">정산 예정 농가</div>
-  <p style="font-size:12px;color:var(--muted);margin:2px 0 6px;">아래 비육 사육 현황 · 후기 자돈 사육 현황 표에서 그룹을 펼쳐 정산예정 체크박스를 선택하면 이 목록에 비육/자돈으로 나뉘어 표시되고, 각 구분별 종합 성적도 함께 나옵니다.</p>
+  <p style="font-size:12px;color:var(--muted);margin:2px 0 6px;">아래 비육 사육 현황 표에서 그룹을 펼쳐 정산예정 체크박스를 선택하면 이 목록에 표시되고, 종합 성적도 함께 나옵니다.</p>
   <div id="rearing-settlement-box"></div>
 
   <div class="section-title">경고 리스트</div>
@@ -784,37 +784,6 @@
   <div id="rearing-groups-cards-head"></div>
   <div id="rearing-groups-cards-box"></div>
   <p class="count-tag" id="rearing-groups-result-count"></p>
-
-  <div class="section-title">후기 자돈 사육 현황</div>
-  <div class="controls">
-    <input id="pigletSearch" type="text" placeholder="농장명 / 그룹명 검색" oninput="renderRearingPigletTable()">
-    <select id="pigletFilterStatus" onchange="renderRearingPigletTable()">
-      <option value="">상태 전체</option>
-      <option value="사육중" selected>사육중</option>
-      <option value="종료">종료</option>
-    </select>
-  </div>
-  <div class="delay-toolbar">
-    <div class="delay-toolbar-group">
-      <label style="font-size:13px;color:var(--muted);">기준일</label>
-      <input type="date" id="pigletRefDate" onchange="onPigletRefDateChange()">
-    </div>
-    <div class="delay-toolbar-group">
-      <select id="pigletSortField" onchange="renderRearingPigletTable()">
-        <option value="농장명">농장명순</option>
-        <option value="출하대상">두수순</option>
-        <option value="판매두수">판매두수순</option>
-        <option value="최고일령">최고일령순</option>
-        <option value="평균일령">평균일령순</option>
-        <option value="육성률">육성률순</option>
-        <option value="재고확인">최근재고확인순</option>
-      </select>
-      <button class="tab-btn" id="pigletSortDirBtn" onclick="togglePigletSortDir()">오름차순 ▲</button>
-    </div>
-  </div>
-  <div id="rearing-piglet-cards-head"></div>
-  <div id="rearing-piglet-cards-box"></div>
-  <p class="count-tag" id="rearing-piglet-result-count"></p>
 
   <div class="section-title">폐사 이력</div>
   <div class="upload-box" id="rearing-mortality-dropzone">
@@ -3946,6 +3915,17 @@ function shipmentPersonOptions(selected){
   return '<option value="">선택안함</option>' + SHIPMENT_PEOPLE.map(p=>`<option value="${p}" ${p===selected?'selected':''}>${p}</option>`).join('');
 }
 
+// 도축장(거래처 칸)과 별개로, 약감포크/동아미트/이서푸드/영천/신선 중에서 육가공업체를 바로 골라
+// 도축장 칸에 채워넣을 수 있는 선택칸. 업로드 확인 화면뿐 아니라 저장된 기록을 수정할 때도 쓸 수 있게 함.
+function companyPickerHtml(currentValue, targetInputId){
+  const guess = SHIP_COMPANY_LIST.includes(normalizeCompany(currentValue||'')) ? normalizeCompany(currentValue||'') : '';
+  return `<div class="kv"><div class="k">육가공업체</div><select onchange="document.getElementById('${targetInputId}').value=this.value" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">
+    <option value="">선택안함</option>
+    ${SHIP_COMPANY_LIST.map(c=>`<option value="${c}" ${c===guess?'selected':''}>${c}</option>`).join('')}
+    <option value="기타" ${guess==='기타'?'selected':''}>기타</option>
+  </select></div>`;
+}
+
 function openShipmentAddModal(){
   const modal = document.getElementById('modal');
   modal.innerHTML = `
@@ -3953,7 +3933,8 @@ function openShipmentAddModal(){
     <h2>출하 기록 직접 입력</h2>
     <div class="kv"><div class="k">농가명</div><input id="ship-농가명" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
     <div class="kv"><div class="k">출하일</div><input id="ship-도축일" type="date" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
-    <div class="kv"><div class="k">거래처</div><input id="ship-거래처" placeholder="약감포크 / 동아미트 / 이서푸드 / 영천 / 신선 등" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
+    ${companyPickerHtml('', 'ship-거래처')}
+    <div class="kv"><div class="k">도축장</div><input id="ship-거래처" placeholder="위에서 선택하거나 직접 입력" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
     <div class="kv"><div class="k">지역부장</div><select id="ship-지역부장" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">${shipmentPersonOptions('')}</select></div>
     <div class="kv"><div class="k">두수</div><input id="ship-두수" type="number" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
     <div class="kv"><div class="k">총생체중(kg)</div><input id="ship-총생체중" type="number" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
@@ -4041,7 +4022,8 @@ function openShipmentEditModal(id){
     <div class="sub">${s.도축일} · ${s.거래처||'-'} · ${s.등록방식==='excel'?'엑셀 업로드':'직접입력'}</div>
     <div class="kv"><div class="k">농가명</div><input id="ship-농가명" value="${(s.농가명||'').replace(/"/g,'&quot;')}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
     <div class="kv"><div class="k">출하일</div><input id="ship-도축일" type="date" value="${s.도축일||''}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
-    <div class="kv"><div class="k">거래처</div><input id="ship-거래처" value="${(s.거래처||'').replace(/"/g,'&quot;')}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
+    ${companyPickerHtml(s.거래처, 'ship-거래처')}
+    <div class="kv"><div class="k">도축장</div><input id="ship-거래처" value="${(s.거래처||'').replace(/"/g,'&quot;')}" placeholder="위에서 선택하거나 직접 입력" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
     <div class="kv"><div class="k">지역부장</div><select id="ship-지역부장" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">${shipmentPersonOptions(s.지역부장)}</select></div>
     <div class="kv"><div class="k">두수</div><input id="ship-두수" type="number" value="${s.두수||0}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
     ${shipmentAgeDetailHtml(s)}
@@ -6383,7 +6365,7 @@ function renderRearingSettlementBox(){
   if(!box) return;
   const allSettled = REARING_GROUPS.filter(g=>g.정산예정월);
   if(!allSettled.length){
-    box.innerHTML = '<p class="upload-status">정산 예정으로 표시된 그룹이 없습니다. 아래 비육 사육 현황·후기 자돈 사육 현황 표에서 그룹을 펼쳐 정산예정월(당월/다음달/그다음달)을 선택하면 여기에 표시됩니다.</p>';
+    box.innerHTML = '<p class="upload-status">정산 예정으로 표시된 그룹이 없습니다. 아래 비육 사육 현황 표에서 그룹을 펼쳐 정산예정월(당월/다음달/그다음달)을 선택하면 여기에 표시됩니다.</p>';
     return;
   }
   const biyukList = allSettled.filter(g=>(g.돼지구분||'').trim()!=='자돈');
