@@ -3197,7 +3197,7 @@ function findShipmentRecordForAgeRow(farm, 도축일, 거래처, 두수){
   if(!candidates.length) return null;
   if(candidates.length===1) return candidates[0];
   const wantCompany = normalizeCompany(거래처);
-  const companyMatch = candidates.filter(s=> normalizeCompany(s.거래처)===wantCompany);
+  const companyMatch = candidates.filter(s=> normalizeCompany(shipmentCompanyRaw(s))===wantCompany);
   return companyMatch.length===1 ? companyMatch[0] : null;
 }
 
@@ -3275,10 +3275,11 @@ async function prepareShipmentUpload(){
     parsed.등록방식 = template === 'settlement' ? 'excel' : 'grading-excel';
     const farmFromFilename = extractFarmNameFromFilename(file.name);
     if(farmFromFilename) parsed.농가명 = farmFromFilename;
-    if(PLANT_COMPANY_ALIASES[parsed.거래처]) parsed.거래처 = PLANT_COMPANY_ALIASES[parsed.거래처];
-    // 등급판정서의 '작업장명'(도축장)과 실제 지급 거래처(약감포크 등)는 다른 개념이라 자동 인식이 안 될 수 있어
-    // 파일명에서 거래처가 보이면 기본값으로 제안하고, 업로드하는 사람이 직접 선택/수정하게 함
-    const companyGuess = SHIP_COMPANY_LIST.includes(normalizeCompany(parsed.거래처)) ? normalizeCompany(parsed.거래처) : extractCompanyFromFilename(file.name);
+    // 도축장명(거래처)은 파일에서 읽은 그대로 유지하고 절대 덮어쓰지 않음 — 육가공업체(실제 지급 거래처)는
+    // 별도 필드로 관리한다. 등급판정서의 '작업장명'(도축장)과 실제 지급 거래처(약감포크 등)는 다른 개념이라
+    // 자동 인식이 안 될 수 있어, 별칭 매핑이나 파일명에서 거래처가 보이면 기본값으로 제안하고
+    // 업로드하는 사람이 직접 선택/수정하게 함
+    const companyGuess = PLANT_COMPANY_ALIASES[parsed.거래처] || (SHIP_COMPANY_LIST.includes(normalizeCompany(parsed.거래처)) ? normalizeCompany(parsed.거래처) : extractCompanyFromFilename(file.name));
 
     const existingMatch = findExistingShipment(parsed.농가명, parsed.도축일);
 
@@ -3320,7 +3321,7 @@ async function prepareShipmentUpload(){
         <h4>${parsed.농가명} · ${parsed.도축일} · ${parsed.두수}두</h4>
         ${dupNote}
         <div class="kv"><div class="k">육가공업체</div>
-          <select id="pending-거래처" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">
+          <select id="pending-육가공업체" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">
             <option value="">선택안함</option>
             ${SHIP_COMPANY_LIST.map(c=>`<option value="${c}" ${c===companyGuess?'selected':''}>${c}</option>`).join('')}
             <option value="기타" ${companyGuess==='기타'?'selected':''}>기타</option>
@@ -3349,10 +3350,10 @@ async function confirmShipmentSave(){
   const statusEl = document.getElementById('shipment-excel-status');
   try{
     const sel = document.getElementById('pending-지역부장');
-    const companyEl = document.getElementById('pending-거래처');
+    const companyEl = document.getElementById('pending-육가공업체');
     const weightEl = document.getElementById('pending-총생체중');
     const chosen = sel ? sel.value : '';
-    if(companyEl && companyEl.value) pendingShipmentRecord.거래처 = companyEl.value;
+    if(companyEl && companyEl.value) pendingShipmentRecord.육가공업체 = companyEl.value;
     if(!chosen){
       statusEl.textContent = '지역부장을 선택해야 저장할 수 있습니다.';
       return;
@@ -3559,7 +3560,7 @@ function renderShipmentFilters(){
   const farmSel = document.getElementById('shipmentFilterFarm');
   const personSel = document.getElementById('shipmentFilterPerson');
   const curComp = compSel.value, curFarm = farmSel.value, curPerson = personSel.value;
-  compSel.innerHTML = '<option value="">거래처 전체</option>' + uniqueSorted(SHIPMENTS.map(s=>s.거래처)).map(c=>`<option value="${c}">${c}</option>`).join('');
+  compSel.innerHTML = '<option value="">거래처 전체</option>' + uniqueSorted(SHIPMENTS.map(s=>shipmentCompanyRaw(s))).map(c=>`<option value="${c}">${c}</option>`).join('');
   farmSel.innerHTML = '<option value="">농가 전체</option>' + uniqueSorted(SHIPMENTS.map(s=>s.농가명)).map(f=>`<option value="${f}">${f}</option>`).join('');
   personSel.innerHTML = '<option value="">지역부장 전체</option>' + uniqueSorted(SHIPMENT_PEOPLE).map(p=>`<option value="${p}">${p}</option>`).join('');
   compSel.value = curComp; farmSel.value = curFarm; personSel.value = curPerson;
@@ -3605,7 +3606,7 @@ function getShipmentFilterKey(s, field){
   switch(field){
     case '도축일': return s.도축일 || '(미입력)';
     case '농가명': return s.농가명 || '(미입력)';
-    case '거래처': return s.거래처 || '(미입력)';
+    case '거래처': return shipmentCompanyRaw(s) || '(미입력)';
     case '지역부장': return s.지역부장 || '(미입력)';
     case '두수': return String(Number(s.두수)||0);
     case '총생체중': return String(Number(s.총생체중)||0);
@@ -3762,7 +3763,7 @@ function getShipmentSortValue(s, field){
     case '등급율': { const r = computeGradeRate(s); return r===null ? -Infinity : r; }
     case '도축일': return s.도축일||'';
     case '농가명': return s.농가명||'';
-    case '거래처': return s.거래처||'';
+    case '거래처': return shipmentCompanyRaw(s)||'';
     case '지역부장': return s.지역부장||'';
     default: return '';
   }
@@ -3787,7 +3788,7 @@ function renderShipmentTable(){
   const month = monthSel ? monthSel.value : '';
 
   let list = SHIPMENTS.filter(s=>{
-    if(comp && s.거래처 !== comp) return false;
+    if(comp && shipmentCompanyRaw(s) !== comp) return false;
     if(farm && s.농가명 !== farm) return false;
     if(person && s.지역부장 !== person) return false;
     if(dow && dayOfWeekKr(s.도축일) !== dow) return false;
@@ -3828,7 +3829,7 @@ function renderShipmentTable(){
         return `<div class="record-card rc-cols-11" onclick="openShipmentEditModal(${s.id})">
           <div class="rc-field"><b>${s.도축일||'-'}</b><span class="rc-label">${dayOfWeekKr(s.도축일)}요일</span></div>
           <div class="rc-field"><b>${s.농가명||'-'}</b><span class="rc-label">농가명</span></div>
-          <div class="rc-field"><b>${s.거래처||'-'}</b><span class="rc-label">거래처</span></div>
+          <div class="rc-field"><b>${shipmentCompanyRaw(s)||'-'}</b><span class="rc-label">거래처</span></div>
           <div class="rc-field"><b>${s.지역부장||'-'}</b><span class="rc-label">지역부장</span></div>
           <div class="rc-field"><b>${(Number(s.두수)||0).toLocaleString('ko-KR')}</b><span class="rc-label">두수</span></div>
           <div class="rc-field"><b>${(s.총생체중||0).toLocaleString('ko-KR')}kg</b><span class="rc-label">총생체중</span></div>
@@ -3877,7 +3878,7 @@ function renderShipmentAll(){
   const person = document.getElementById('shipmentFilterPerson').value;
   const dowSel = document.getElementById('shipmentFilterDow');
   const dow = dowSel ? dowSel.value : '';
-  const filtered = SHIPMENTS.filter(s=> (!comp||s.거래처===comp) && (!farm||s.농가명===farm) && (!person||s.지역부장===person) && (!dow||dayOfWeekKr(s.도축일)===dow) );
+  const filtered = SHIPMENTS.filter(s=> (!comp||shipmentCompanyRaw(s)===comp) && (!farm||s.농가명===farm) && (!person||s.지역부장===person) && (!dow||dayOfWeekKr(s.도축일)===dow) );
   renderShipmentKPI(filtered);
   renderShipmentAlerts(filtered);
   renderShipmentCompanyCharts();
@@ -3915,11 +3916,12 @@ function shipmentPersonOptions(selected){
   return '<option value="">선택안함</option>' + SHIPMENT_PEOPLE.map(p=>`<option value="${p}" ${p===selected?'selected':''}>${p}</option>`).join('');
 }
 
-// 도축장(거래처 칸)과 별개로, 약감포크/동아미트/이서푸드/영천/신선 중에서 육가공업체를 바로 골라
-// 도축장 칸에 채워넣을 수 있는 선택칸. 업로드 확인 화면뿐 아니라 저장된 기록을 수정할 때도 쓸 수 있게 함.
-function companyPickerHtml(currentValue, targetInputId){
+// 도축장(거래처 칸)과 별개로, 약감포크/동아미트/이서푸드/영천/신선 중에서 육가공업체를 바로 고르는 선택칸.
+// 도축장명은 그대로 유지되고 육가공업체만 별도 필드(육가공업체)로 저장됨. 업로드 확인 화면뿐 아니라
+// 저장된 기록을 수정할 때도 쓸 수 있게 함.
+function companyPickerHtml(currentValue, selectId){
   const guess = SHIP_COMPANY_LIST.includes(normalizeCompany(currentValue||'')) ? normalizeCompany(currentValue||'') : '';
-  return `<div class="kv"><div class="k">육가공업체</div><select onchange="document.getElementById('${targetInputId}').value=this.value" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">
+  return `<div class="kv"><div class="k">육가공업체</div><select id="${selectId}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">
     <option value="">선택안함</option>
     ${SHIP_COMPANY_LIST.map(c=>`<option value="${c}" ${c===guess?'selected':''}>${c}</option>`).join('')}
     <option value="기타" ${guess==='기타'?'selected':''}>기타</option>
@@ -3933,8 +3935,8 @@ function openShipmentAddModal(){
     <h2>출하 기록 직접 입력</h2>
     <div class="kv"><div class="k">농가명</div><input id="ship-농가명" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
     <div class="kv"><div class="k">출하일</div><input id="ship-도축일" type="date" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
-    ${companyPickerHtml('', 'ship-거래처')}
-    <div class="kv"><div class="k">도축장</div><input id="ship-거래처" placeholder="위에서 선택하거나 직접 입력" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
+    ${companyPickerHtml('', 'ship-육가공업체')}
+    <div class="kv"><div class="k">도축장</div><input id="ship-거래처" placeholder="예: (주)삼세" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
     <div class="kv"><div class="k">지역부장</div><select id="ship-지역부장" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">${shipmentPersonOptions('')}</select></div>
     <div class="kv"><div class="k">두수</div><input id="ship-두수" type="number" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
     <div class="kv"><div class="k">총생체중(kg)</div><input id="ship-총생체중" type="number" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
@@ -3968,6 +3970,7 @@ function collectShipmentForm(){
     농가명: document.getElementById('ship-농가명').value.trim(),
     도축일: document.getElementById('ship-도축일').value,
     거래처: document.getElementById('ship-거래처').value.trim(),
+    육가공업체: document.getElementById('ship-육가공업체') ? document.getElementById('ship-육가공업체').value : '',
     지역부장: document.getElementById('ship-지역부장').value,
     두수: Number(document.getElementById('ship-두수').value)||0,
     총생체중: Number(document.getElementById('ship-총생체중').value)||0,
@@ -4019,11 +4022,11 @@ function openShipmentEditModal(id){
   modal.innerHTML = `
     <button class="close-btn" onclick="closeModal()">&times;</button>
     <h2>${s.농가명} 출하기록 수정</h2>
-    <div class="sub">${s.도축일} · ${s.거래처||'-'} · ${s.등록방식==='excel'?'엑셀 업로드':'직접입력'}</div>
+    <div class="sub">${s.도축일} · ${shipmentCompanyRaw(s)||'-'} · ${s.등록방식==='excel'?'엑셀 업로드':'직접입력'}</div>
     <div class="kv"><div class="k">농가명</div><input id="ship-농가명" value="${(s.농가명||'').replace(/"/g,'&quot;')}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
     <div class="kv"><div class="k">출하일</div><input id="ship-도축일" type="date" value="${s.도축일||''}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
-    ${companyPickerHtml(s.거래처, 'ship-거래처')}
-    <div class="kv"><div class="k">도축장</div><input id="ship-거래처" value="${(s.거래처||'').replace(/"/g,'&quot;')}" placeholder="위에서 선택하거나 직접 입력" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
+    ${companyPickerHtml(s.육가공업체, 'ship-육가공업체')}
+    <div class="kv"><div class="k">도축장</div><input id="ship-거래처" value="${(s.거래처||'').replace(/"/g,'&quot;')}" placeholder="예: (주)삼세" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
     <div class="kv"><div class="k">지역부장</div><select id="ship-지역부장" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;">${shipmentPersonOptions(s.지역부장)}</select></div>
     <div class="kv"><div class="k">두수</div><input id="ship-두수" type="number" value="${s.두수||0}" style="border:1px solid #e2e8e4;border-radius:6px;padding:6px 8px;font-size:13px;"></div>
     ${shipmentAgeDetailHtml(s)}
@@ -4148,7 +4151,7 @@ const SHIP_COMPANY_COLORS = {약감포크:'#C8102E', 동아미트:'#4A7FA8', 이
 function computeCompanyBreakdown(list){
   const out = {}; [...SHIP_COMPANY_LIST,'기타'].forEach(c=>out[c]=0);
   list.forEach(s=>{
-    const c = normalizeCompany(s.거래처);
+    const c = normalizeCompany(shipmentCompanyRaw(s));
     if(Object.prototype.hasOwnProperty.call(out,c)) out[c] += (Number(s.두수)||0);
     else out.기타 += (Number(s.두수)||0);
   });
@@ -4693,6 +4696,12 @@ let shipCharts = {};
 const PLANT_COMPANY_ALIASES = {
 };
 
+// 출하기록의 도축장명(거래처)과 실제 지급받는 육가공업체는 서로 다른 정보라 별도 필드(육가공업체)로 관리한다.
+// 육가공업체를 선택해두면 그 값을, 아직 선택 안 한(과거) 기록은 거래처 필드를 그대로 육가공업체명으로 취급한다.
+function shipmentCompanyRaw(s){
+  return (s && (s.육가공업체 || s.거래처)) || '';
+}
+
 function normalizeCompany(c){
   c = c || '';
   if(PLANT_COMPANY_ALIASES[c]) return PLANT_COMPANY_ALIASES[c];
@@ -4765,7 +4774,7 @@ function computeExpectedPayRate(shipment){
   // 등판서 미입력 개체는 거래처 상관없이 일괄 지급율 77%로 실적에 반영
   if(!hasGradeReport(shipment)) return 77;
 
-  const company = normalizeCompany(shipment.거래처);
+  const company = normalizeCompany(shipmentCompanyRaw(shipment));
 
   if(company === '이서푸드'){
     const 두수 = Number(shipment.두수)||0;
@@ -4860,7 +4869,7 @@ function renderShipmentCompanyCharts(){
 
   const companyTotals = {};
   scoped.forEach(s=>{
-    const c = normalizeCompany(s.거래처);
+    const c = normalizeCompany(shipmentCompanyRaw(s));
     companyTotals[c] = (companyTotals[c]||0) + (Number(s.두수)||0);
   });
 
@@ -4875,11 +4884,11 @@ function renderShipmentCompanyCharts(){
   dows.forEach(d=> dowCompany[d] = {});
   scoped.forEach(s=>{
     const d = dayOfWeekKr(s.도축일);
-    const c = normalizeCompany(s.거래처);
+    const c = normalizeCompany(shipmentCompanyRaw(s));
     if(!dowCompany[d]) return;
     dowCompany[d][c] = (dowCompany[d][c]||0) + (Number(s.두수)||0);
   });
-  const companies = [...new Set(scoped.map(s=>normalizeCompany(s.거래처)))];
+  const companies = [...new Set(scoped.map(s=>normalizeCompany(shipmentCompanyRaw(s))))];
   const datasets = companies.map(c=>({
     label: c,
     data: dows.map(d=>{
@@ -5171,7 +5180,7 @@ function renderShipmentAlerts(list){
     return;
   }
 
-  const alertItems = dropAny.map(s=>`<div class="alert-item"><strong>${s.농가명}</strong> (${s.도축일}, ${s.거래처||'-'}) — 등외 ${s.등급분포['등외']}마리 발생</div>`);
+  const alertItems = dropAny.map(s=>`<div class="alert-item"><strong>${s.농가명}</strong> (${s.도축일}, ${shipmentCompanyRaw(s)||'-'}) — 등외 ${s.등급분포['등외']}마리 발생</div>`);
   box.innerHTML = alertBoxHtml(`품질 관리 알림 (${periodLabel})`, alertItems.join(''), alertItems.length, false);
 }
 
