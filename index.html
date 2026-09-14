@@ -4158,23 +4158,36 @@ function computeCompanyBreakdown(list){
   return out;
 }
 
-function planCompanyInputsHtml(prefix, person, plan){
+// 거래처별(약감포크/동아미트/이서푸드/영천/신선) + 기타 두수 입력칸을 한 줄씩 렌더링. 각 칸에 입력할 때마다
+// totalElId로 지정한 요소의 합계 표시가 저장 전에도 바로 갱신되도록 oninput을 걸어둔다.
+function companyInputsHtml(prefix, person, valueOf, totalElId, labelWidth){
   const rows = [...SHIP_COMPANY_LIST,'기타'].map(c=>{
     const key = SHIP_COMPANY_FIELD_KEY[c];
-    const val = plan ? (plan['계획'+c]||0) : 0;
-    return `<div style="display:flex;align-items:center;gap:5px;"><span style="width:56px;font-size:11px;color:var(--muted);">${c}</span><input type="number" class="${prefix}-${key}" data-person="${person}" value="${val}" style="width:70px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 5px;font-size:12px;"></div>`;
+    const val = valueOf(c);
+    return `<div style="display:flex;align-items:center;gap:5px;"><span style="width:${labelWidth}px;font-size:11px;color:var(--muted);">${c}</span><input type="number" class="${prefix}-${key}" data-person="${person}" value="${val}" oninput="updateCompanyInputsTotal('${prefix}','${person}','${totalElId}')" style="width:70px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 5px;font-size:12px;"></div>`;
   }).join('');
   return `<div style="display:flex;flex-direction:column;gap:3px;">${rows}</div>`;
 }
 
+function planCompanyInputsHtml(prefix, person, plan, totalElId){
+  return companyInputsHtml(prefix, person, c=> plan ? (plan['계획'+c]||0) : 0, totalElId, 56);
+}
+
 // 차주 예상물량 입력: 거래처별(약감포크/동아미트/이서푸드/영천/신선) + 기타 항목 입력 (당주 원료돈 계획과 달리 차주 예상은 거래처별로 계속 세분화해서 받음)
-function nextWeekForecastInputsHtml(prefix, person, entry){
-  const rows = [...SHIP_COMPANY_LIST,'기타'].map(c=>{
+function nextWeekForecastInputsHtml(prefix, person, entry, totalElId){
+  return companyInputsHtml(prefix, person, c=> entry ? (entry['차주예상'+c]||0) : 0, totalElId, 78);
+}
+
+function updateCompanyInputsTotal(prefix, person, totalElId){
+  const el = document.getElementById(totalElId);
+  if(!el) return;
+  let sum = 0;
+  [...SHIP_COMPANY_LIST,'기타'].forEach(c=>{
     const key = SHIP_COMPANY_FIELD_KEY[c];
-    const val = entry ? (entry['차주예상'+c]||0) : 0;
-    return `<div style="display:flex;align-items:center;gap:5px;"><span style="width:78px;font-size:11px;color:var(--muted);">${c}</span><input type="number" class="${prefix}-${key}" data-person="${person}" value="${val}" style="width:70px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 5px;font-size:12px;"></div>`;
-  }).join('');
-  return `<div style="display:flex;flex-direction:column;gap:3px;">${rows}</div>`;
+    const input = document.querySelector(`.${prefix}-${key}[data-person="${person}"]`);
+    if(input) sum += Number(input.value)||0;
+  });
+  el.textContent = sum.toLocaleString('ko-KR')+'두';
 }
 
 function actualCompanyBreakdownHtml(breakdown){
@@ -4225,8 +4238,8 @@ function renderSupplyMonthSection(){
   const totalCard = `<div class="budget-card total">
       <h4>팀 합계</h4>
       <div class="amt" style="margin-bottom:2px;">월 계획두수 (입고처별)</div>
-      ${planCompanyInputsHtml('mp-team-plan', TEAM_PLAN_KEY, teamPlan)}
-      <div class="amt" style="margin-top:4px;">합계 <b>${teamPlan두수.toLocaleString('ko-KR')}두</b></div>
+      ${planCompanyInputsHtml('mp-team-plan', TEAM_PLAN_KEY, teamPlan, 'mp-team-plan-total')}
+      <div class="amt" style="margin-top:4px;">합계 <b id="mp-team-plan-total">${teamPlan두수.toLocaleString('ko-KR')}두</b></div>
       <div class="amt" style="margin-top:8px;margin-bottom:2px;">월 누적실적 (입고처별)</div>
       ${actualCompanyBreakdownHtml(totalBreakdown)}
       <div class="amt">합계 <b>${totalActual.toLocaleString('ko-KR')}두</b></div>
@@ -4418,7 +4431,7 @@ function renderWeekPlanSection(){
 
     nextRows.push(`<tr>
       <td><strong>${person}</strong></td>
-      <td>${nextWeekForecastInputsHtml('wp-next', person, thisEntry)}<div style="font-weight:700;font-size:12px;margin-top:4px;">합계 ${차주예상두수.toLocaleString('ko-KR')}두</div></td>
+      <td>${nextWeekForecastInputsHtml('wp-next', person, thisEntry, 'wp-next-total-'+person)}<div style="font-weight:700;font-size:12px;margin-top:4px;">합계 <span id="wp-next-total-${person}">${차주예상두수.toLocaleString('ko-KR')}두</span></div></td>
       <td>${차주계획두수.toLocaleString('ko-KR')}두</td>
       <td class="${차주과부족>=0?'diff-pos':'diff-neg'}">${차주과부족>=0?'+':''}${차주과부족.toLocaleString('ko-KR')}두</td>
       <td><button class="tab-btn active" onclick="saveWeekPlanRow('${person}','${thisMondayStr}')">저장</button></td>
