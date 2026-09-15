@@ -725,11 +725,16 @@
     </div>
   </div>
   <div class="controls">
+    <div class="target-toggle" id="shipRiskViewModeToggle">
+      <button type="button" data-mode="farm" class="active" onclick="setShipRiskViewMode('farm')">농장별</button>
+      <button type="button" data-mode="batch" onclick="setShipRiskViewMode('batch')">일령별(배치별)</button>
+    </div>
     <button class="tab-btn" id="shipRiskUncheckedBtn" onclick="toggleShipRiskUncheckedOnly()">미점검만</button>
     <button class="tab-btn" id="shipRiskExpandAllBtn" onclick="toggleShipRiskExpandAll()">모두 펼치기</button>
   </div>
 
   <div id="shiprisk-cards-box"></div>
+  <div id="shiprisk-batch-list-box" style="display:none;"></div>
   <p class="count-tag" id="shiprisk-result-count"></p>
 </div>
 
@@ -7845,6 +7850,61 @@ let shipRiskSortField = '정체율';
 let shipRiskSortDir = 'desc';
 let shipRiskChecked = new Set();
 let shipRiskOnlyUnchecked = false;
+let shipRiskViewMode = 'farm'; // 'farm' = 농장별 카드, 'batch' = 일령(배치)별 평면 목록
+
+function setShipRiskViewMode(mode){
+  shipRiskViewMode = mode;
+  document.querySelectorAll('#shipRiskViewModeToggle button').forEach(b=> b.classList.toggle('active', b.dataset.mode===mode));
+  const expandAllBtn = document.getElementById('shipRiskExpandAllBtn');
+  if(expandAllBtn) expandAllBtn.style.display = mode==='farm' ? '' : 'none';
+  document.getElementById('shiprisk-cards-box').style.display = mode==='farm' ? '' : 'none';
+  document.getElementById('shiprisk-batch-list-box').style.display = mode==='batch' ? '' : 'none';
+  renderShipmentReadyFarms();
+}
+
+// 농장별 카드에서는 정체율이 낮은 농장의 오래된 배치가 목록 뒤쪽에 묻혀 안 보일 수 있어서,
+// 배치(그룹) 하나하나를 일령이 오래된 순으로 바로 나열해서 확인할 수 있게 하는 평면 목록.
+function renderShipRiskBatchList(refDate){
+  const box = document.getElementById('shiprisk-batch-list-box');
+  if(!box) return;
+  const allBiyuk = REARING_GROUPS.filter(g=>(g.돼지구분||'').trim()!=='자돈');
+  const active = allBiyuk.filter(g=>g.상태==='사육중' || g.상태==='종료');
+  let delayed = active.map(g=>({ g, age: computeGroupAgeDays(g, refDate) }))
+    .filter(x=> x.age!==null && x.age>=shipRiskTargetDay && (Number(x.g.현재고)||0)>0);
+  if(shipRiskOnlyUnchecked) delayed = delayed.filter(x=>!shipRiskChecked.has(x.g.농장명||'(농장명 없음)'));
+  delayed.sort((a,b)=> b.age - a.age);
+
+  if(!delayed.length){
+    box.innerHTML = '<p class="upload-status">조건에 해당하는 배치가 없습니다 ✅</p>';
+    return;
+  }
+
+  const rows = delayed.map(({g,age})=>{
+    const farm = g.농장명||'(농장명 없음)';
+    const gr = getRearingSurvivalRate(g);
+    const over = age - shipRiskTargetDay;
+    const overStyle = over>=60?'color:var(--danger);':'';
+    return `<tr>
+      <td style="font-weight:700;color:var(--ink);">${escapeHtml(farm)}</td>
+      <td>${escapeHtml(FARM_MANAGERS[farm]||'-')}</td>
+      <td>${g.그룹명||'-'}</td>
+      <td>${g.전입일||'-'}</td>
+      <td style="text-align:right;font-weight:700;${overStyle}">${age}일</td>
+      <td style="text-align:right;color:var(--muted);${overStyle}">(+${over}일)</td>
+      <td style="text-align:right;">${(Number(g.전입두수)||0).toLocaleString('ko-KR')}두</td>
+      <td style="text-align:right;">${(Number(g.현재고)||0).toLocaleString('ko-KR')}두</td>
+      <td style="text-align:right;${survivalRateStyle(gr)}">${gr===null?'-':gr.toFixed(1)+'%'}</td>
+    </tr>`;
+  }).join('');
+
+  box.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr>
+      <th style="text-align:left;">농장명</th><th style="text-align:left;">담당자</th><th style="text-align:left;">그룹명</th><th style="text-align:left;">전입일</th>
+      <th style="text-align:right;">일령</th><th style="text-align:right;">목표 초과</th><th style="text-align:right;">전입두수</th><th style="text-align:right;">현재고</th><th style="text-align:right;">육성율</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
 
 function renderShipmentReadyFarms(){
   if(!shipRiskRefDate) shipRiskRefDate = localDateStr(new Date());
@@ -7875,9 +7935,18 @@ function renderShipmentReadyFarms(){
 
   const box = document.getElementById('shiprisk-cards-box');
   const countTag = document.getElementById('shiprisk-result-count');
-  if(countTag) countTag.textContent = `${overFarms.length}개 농장`;
-  if(!box) return;
-  box.innerHTML = overFarms.length ? overFarms.map(sm=>shipRiskCardHtml(sm, shipRiskRefDate)).join('') : '<p class="upload-status">조건에 해당하는 농장이 없습니다 ✅</p>';
+  if(box) box.innerHTML = overFarms.length ? overFarms.map(sm=>shipRiskCardHtml(sm, shipRiskRefDate)).join('') : '<p class="upload-status">조건에 해당하는 농장이 없습니다 ✅</p>';
+
+  renderShipRiskBatchList(shipRiskRefDate);
+
+  if(countTag){
+    if(shipRiskViewMode==='batch'){
+      const batchCount = overFarms.reduce((s,sm)=>s+sm.지연개수,0);
+      countTag.textContent = `${batchCount}개 배치 (${overFarms.length}개 농장)`;
+    } else {
+      countTag.textContent = `${overFarms.length}개 농장`;
+    }
+  }
 }
 
 function shipRiskCardHtml(sm, refDate){
