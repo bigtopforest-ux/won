@@ -508,6 +508,25 @@ export default async (req, context) => {
       return json({ ok: true, added, skipped, total: merged.length });
     }
 
+    if (action === "setMortalityReason") {
+      // 개월령별 폐사 주간표에서 농장+배치별로 묶어 보여주는 폐사 사유/비고를 한 번에 반영.
+      // ids는 그 농장+배치+개월령 묶음에 속하는 폐사 기록들의 id 배열(클라이언트에서 이미 계산해서 보냄).
+      const { ids, 사유, 비고 } = body;
+      if (!Array.isArray(ids) || !ids.length) return json({ error: "ids required" }, 400);
+      const existing = await loadMortality(s);
+      const idSet = new Set(ids);
+      let updated = 0;
+      const out = existing.map((r) => {
+        if (idSet.has(r.id)) {
+          updated++;
+          return { ...r, 원인: 사유 || "", 비고: 비고 || "", 사유수정자: editor || "", 사유수정시각: now };
+        }
+        return r;
+      });
+      if (updated) await s.setJSON(MORTALITY_KEY, out);
+      return json({ ok: true, updated });
+    }
+
     if (action === "dedupeMortality") {
       const existing = await loadMortality(s);
       const seen = new Set();

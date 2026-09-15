@@ -6227,16 +6227,112 @@ function onRearingWeekChange(){
 
 const REARING_BUCKETS = ['4개월령','5개월령','6개월령','7개월령'];
 
-function rearingBucketTableHtml(events, totalStock){
+// 개월령별 폐사표에서 펼쳐둔 구간("containerId|개월령")과, 지금 사유/비고를 입력 중인 농장+배치("농장명|그룹명") 추적
+let rearingBucketExpanded = new Set();
+let rearingBucketEditingKey = null;
+
+// 한 개월령 구간에 속하는 폐사기록(events)을 농장+배치(그룹명)별로 묶어 농장/전입일/배치/폐사두수/사유/비고 행을 만든다.
+// 전입일은 사육그룹내역(REARING_GROUPS)에서 같은 농장+배치를 찾아 가져온다(그룹명 표기가 약간 다를 수 있어 기존 매칭 로직 재사용).
+function rearingBucketDetailRows(events, bucket){
+  const bucketEvents = events.filter(e=>e.개월령===bucket);
+  const byFarmGroup = new Map();
+  bucketEvents.forEach(e=>{
+    const key = e.농장명+'|'+e.그룹명;
+    if(!byFarmGroup.has(key)) byFarmGroup.set(key, { 농장명:e.농장명, 그룹명:e.그룹명, 폐사두수:0, 원인목록:new Set(), 비고목록:new Set(), ids:[] });
+    const row = byFarmGroup.get(key);
+    row.폐사두수 += Number(e.폐사두수)||0;
+    if(e.원인) row.원인목록.add(e.원인);
+    if(e.비고) row.비고목록.add(e.비고);
+    if(e.id!==undefined && e.id!==null) row.ids.push(e.id);
+  });
+  return [...byFarmGroup.values()].map(r=>{
+    const mKey = groupMatchKeyFromMortality({농장명:r.농장명, 그룹명:r.그룹명});
+    const group = REARING_GROUPS.find(g=> g.농장명===r.농장명 && groupMatchKeyFromRearingGroup(g)===mKey);
+    return { ...r, 전입일: group ? group.전입일 : '-', 사유: [...r.원인목록].join(', '), 비고: [...r.비고목록].join(', ') };
+  }).sort((a,b)=> b.폐사두수 - a.폐사두수);
+}
+
+function toggleRearingBucket(containerId, bucket){
+  const key = containerId+'|'+bucket;
+  if(rearingBucketExpanded.has(key)) rearingBucketExpanded.delete(key);
+  else rearingBucketExpanded.add(key);
+  rearingBucketEditingKey = null;
+  if(containerId==='rearing-week-box') renderRearingWeekSection();
+  else renderRearingMonthSection();
+}
+
+function startEditRearingReason(containerId, farmGroupKey){
+  rearingBucketEditingKey = farmGroupKey;
+  if(containerId==='rearing-week-box') renderRearingWeekSection();
+  else renderRearingMonthSection();
+}
+
+async function saveRearingReason(containerId, farmGroupKey, ids){
+  const domKey = safeDomId(farmGroupKey);
+  const 사유El = document.getElementById(`rbr-사유-${domKey}`);
+  const 비고El = document.getElementById(`rbr-비고-${domKey}`);
+  const 사유 = 사유El ? 사유El.value.trim() : '';
+  const 비고 = 비고El ? 비고El.value.trim() : '';
+  try{
+    await rearingApiRequest({ action:'setMortalityReason', ids, 사유, 비고 });
+    await loadRearingFromAPI();
+    rearingBucketEditingKey = null;
+    if(containerId==='rearing-week-box') renderRearingWeekSection();
+    else renderRearingMonthSection();
+  }catch(e){
+    alert('저장 실패: ' + e.message);
+  }
+}
+
+function rearingBucketTableHtml(events, totalStock, containerId){
   const rows = REARING_BUCKETS.map(b=>{
     const cnt = events.filter(e=>e.개월령===b).reduce((s,e)=>s+(Number(e.폐사두수)||0),0);
     return {b, cnt};
   });
   const total = rows.reduce((s,r)=>s+r.cnt,0);
+  const bodyRows = rows.map(r=>{
+    // containerId가 없으면(종합보고의 주차별 미니카드 등) 펼치기 기능 없이 예전처럼 정적으로만 표시
+    const clickable = !!containerId && r.cnt>0;
+    const bucketKey = containerId+'|'+r.b;
+    const expanded = clickable && rearingBucketExpanded.has(bucketKey);
+    const mainRow = `<tr ${clickable?`onclick="toggleRearingBucket('${containerId}','${r.b}')"`:''} style="cursor:${clickable?'pointer':'default'};">
+      <td>${r.b} ${clickable?(expanded?'▲':'▼'):''}</td><td>${r.cnt}</td><td>${total? (r.cnt/total*100).toFixed(1):'0.0'}%</td>
+    </tr>`;
+    if(!expanded) return mainRow;
+    const detailRows = rearingBucketDetailRows(events, r.b);
+    const detailHtml = `<tr><td colspan="3" style="padding:0;background:#faf9f6;">
+      <div class="table-wrap" style="margin:6px 10px;">
+        <table style="width:100%;font-size:12.5px;">
+          <thead><tr><th>농장</th><th>전입일</th><th>배치</th><th>폐사두수</th><th>사유</th><th>비고</th><th></th></tr></thead>
+          <tbody>
+            ${detailRows.map(d=>{
+              const fgKey = d.농장명+'|'+d.그룹명;
+              const domKey = safeDomId(fgKey);
+              const editing = rearingBucketEditingKey === fgKey;
+              if(editing){
+                return `<tr onclick="event.stopPropagation()">
+                  <td>${escapeHtml(d.농장명)}</td><td>${d.전입일||'-'}</td><td>${escapeHtml(d.그룹명)}</td><td>${d.폐사두수}</td>
+                  <td><input id="rbr-사유-${domKey}" value="${escapeHtml(d.사유||'')}" placeholder="폐사사유" style="width:100px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 5px;font-size:12px;"></td>
+                  <td><input id="rbr-비고-${domKey}" value="${escapeHtml(d.비고||'')}" placeholder="비고" style="width:100px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 5px;font-size:12px;"></td>
+                  <td><button class="tab-btn active" style="padding:2px 8px;font-size:11px;" onclick="saveRearingReason('${containerId}','${fgKey.replace(/'/g,"\\'")}',${JSON.stringify(d.ids)})">저장</button></td>
+                </tr>`;
+              }
+              return `<tr onclick="event.stopPropagation(); startEditRearingReason('${containerId}','${fgKey.replace(/'/g,"\\'")}')" style="cursor:pointer;">
+                <td>${escapeHtml(d.농장명)}</td><td>${d.전입일||'-'}</td><td>${escapeHtml(d.그룹명)}</td><td>${d.폐사두수}</td>
+                <td>${d.사유?escapeHtml(d.사유):'<span style="color:var(--muted);">입력하기</span>'}</td><td>${escapeHtml(d.비고)||'-'}</td><td></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </td></tr>`;
+    return mainRow + detailHtml;
+  }).join('');
+
   return `<div class="table-wrap"><table>
     <thead><tr><th>구분</th><th>폐사</th><th>개월령 폐사비율</th></tr></thead>
     <tbody>
-      ${rows.map(r=>`<tr><td>${r.b}</td><td>${r.cnt}</td><td>${total? (r.cnt/total*100).toFixed(1):'0.0'}%</td></tr>`).join('')}
+      ${bodyRows}
       <tr class="total-row"><td>합계</td><td>${total}</td><td>100%</td></tr>
       <tr style="font-weight:700;background:#fff7cc;"><td>재고현황</td><td colspan="2">${totalStock.toLocaleString('ko-KR')}</td></tr>
     </tbody>
@@ -6289,7 +6385,7 @@ function renderRearingWeekSection(){
   if(!thisWeek){ box.innerHTML = '<p class="upload-status">폐사 데이터가 없습니다.</p>'; return; }
   const events = REARING_MORTALITY.filter(m=> m.폐사발생일 >= thisWeek.start && m.폐사발생일 <= thisWeek.end);
   const totalStock = REARING_GROUPS.filter(g=>g.상태==='사육중').reduce((s,g)=>s+(Number(g.현재고)||0),0);
-  box.innerHTML = `<div class="section-title" style="font-size:14px;margin-top:0;">${thisWeek.label}</div>` + rearingBucketTableHtml(events, totalStock);
+  box.innerHTML = `<div class="section-title" style="font-size:14px;margin-top:0;">${thisWeek.label}</div>` + rearingBucketTableHtml(events, totalStock, 'rearing-week-box');
 }
 
 let selectedRearingMonth = null;
@@ -6319,7 +6415,7 @@ function renderRearingMonthSection(){
 
   const events = REARING_MORTALITY.filter(m=>(m.폐사발생일||'').slice(0,7)===selectedRearingMonth);
   const totalStock = REARING_GROUPS.filter(g=>g.상태==='사육중').reduce((s,g)=>s+(Number(g.현재고)||0),0);
-  box.innerHTML = rearingBucketTableHtml(events, totalStock);
+  box.innerHTML = rearingBucketTableHtml(events, totalStock, 'rearing-month-box');
 }
 
 function renderRearingFilters(){
