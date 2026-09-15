@@ -89,6 +89,20 @@ function groupKey(v) {
   return normKeyPart(v);
 }
 
+// 사육그룹내역(원본) 서식과 "그룹보고서 전입현황" 서식은 같은 배치인데 그룹명 표기가 다르다.
+// 원본: "농장명-2026-001" 또는 끝에 (차수)가 붙은 "농장명-2026-001(1)".
+// 그룹보고서 전입현황: 농장명(전체)이 그룹명 앞에 한 번 더 붙는다 - "농장명-농장명-2026-001".
+// 두 서식 모두 그룹명 맨 끝의 (차수)를 떼고, 맨 앞에 "농장명-"이 남아있는 동안 반복해서 떼어내면
+// 같은 배치는 같은 정규화 키로 수렴한다(중복 접두가 없는 원본 서식도 한 번은 자연스럽게 떼어짐).
+function canonicalGroupKey(농장명, 그룹명) {
+  const farm = normKeyPart(농장명);
+  let name = normKeyPart(그룹명).replace(/\(\d+\)\s*$/, "");
+  while (farm && name.startsWith(farm + "-")) {
+    name = name.slice(farm.length + 1);
+  }
+  return farm + "|" + name;
+}
+
 function monthBucket(ageDays) {
   if (ageDays === null || ageDays === undefined || ageDays === "") return "";
   const n = Number(ageDays);
@@ -142,7 +156,16 @@ export default async (req, context) => {
       for (const row of rows) {
         if (!row.그룹명) continue;
         const rowKey = groupKey(row.그룹명);
-        const idx = groups.findIndex((g) => groupKey(g.그룹명) === rowKey);
+        let idx = groups.findIndex((g) => groupKey(g.그룹명) === rowKey);
+        // 정확히 같은 그룹명이 없으면, "사육그룹내역"과 "그룹보고서 전입현황" 두 서식이 같은 배치를
+        // 다른 그룹명으로 표기한 경우인지 정규화 키(+전입일 일치)로 한 번 더 확인해서 중복 생성을 막는다.
+        if (idx === -1) {
+          const rowCanon = canonicalGroupKey(row.농장명, row.그룹명);
+          const rowDate = normKeyPart(row.전입일);
+          if (rowDate) {
+            idx = groups.findIndex((g) => canonicalGroupKey(g.농장명, g.그룹명) === rowCanon && normKeyPart(g.전입일) === rowDate);
+          }
+        }
         // 신규 등록 시에는 모든 필드를 채우되(값 없으면 빈 문자열), 기존 그룹 갱신 시에는
         // 업로드 파일에 실제로 들어있는 필드만 덮어쓴다. 파일 서식이 바뀌어 일부 컬럼(예: 전입일령,
         // 번식농장명 등)이 빠져도 이미 저장돼 있던 값을 빈 문자열로 지워버리지 않기 위함.
@@ -217,6 +240,45 @@ export default async (req, context) => {
       const removed = groups.length - kept.length;
       await s.setJSON(GROUPS_KEY, kept);
       return json({ ok: true, removed, total: kept.length });
+    }
+
+    if (action === "dedupeSimilarGroups" || action === "previewSimilarGroupDupes") {
+      // "사육그룹내역"과 "그룹보고서 전입현황" 두 서식을 둘 다 올려서 같은 배치가 그룹명만 다르게
+      // 중복 저장된 것을 정리. 정규화한 그룹명(농장명 중복 접두 제거)과 전입일이 모두 같은 것들끼리
+      // 묶어서, 그 중 필드가 더 채워진(그 다음 더 최근 수정된) 하나만 남긴다.
+      // 전입일이 비어있는 그룹은 오판 위험이 있어 대상에서 제외하고 그대로 둔다.
+      // dryRun(=previewSimilarGroupDupes)일 때는 실제로 지우지 않고 지워질 목록만 미리 보여준다.
+      const dryRun = action === "previewSimilarGroupDupes";
+      const groups = await loadGroups(s);
+      const byKey = new Map();
+      const untouched = [];
+      for (const g of groups) {
+        const date = normKeyPart(g.전입일);
+        if (!date) { untouched.push(g); continue; }
+        const key = canonicalGroupKey(g.농장명, g.그룹명) + "|" + date;
+        if (!byKey.has(key)) byKey.set(key, []);
+        byKey.get(key).push(g);
+      }
+      const kept = [...untouched];
+      const removedList = [];
+      for (const list of byKey.values()) {
+        if (list.length === 1) { kept.push(list[0]); continue; }
+        let best = list[0];
+        let bestFilled = GROUP_FIELDS.filter((f) => best[f] !== undefined && best[f] !== "").length;
+        for (const g of list.slice(1)) {
+          const filled = GROUP_FIELDS.filter((f) => g[f] !== undefined && g[f] !== "").length;
+          const bestTime = best.수정시각 || best.등록시각 || "";
+          const gTime = g.수정시각 || g.등록시각 || "";
+          if (filled > bestFilled || (filled === bestFilled && gTime >= bestTime)) { best = g; bestFilled = filled; }
+        }
+        kept.push(best);
+        list.filter((g) => g !== best).forEach((g) => removedList.push({
+          농장명: g.농장명, 그룹명: g.그룹명, 전입일: g.전입일, 전입두수: g.전입두수, 현재고: g.현재고, 판매두수: g.판매두수,
+          유지된그룹명: best.그룹명,
+        }));
+      }
+      if (!dryRun) await s.setJSON(GROUPS_KEY, kept);
+      return json({ ok: true, dryRun, removed: removedList.length, total: kept.length, removedList });
     }
 
     if (action === "setGroupStatus") {
