@@ -2693,15 +2693,20 @@ function getClosingCycleWeeks(closingMonth){
 function computeMedWeekStockTotals(month){
   const weeks = getClosingCycleWeeks(month);
   const rate = MED_STOCK_RATE || 0;
-  let totalStock = 0, totalLimit = 0, totalUsed = 0;
+  let totalStock = 0, totalBaseLimit = 0, totalExtra = 0, totalUsed = 0;
   weeks.forEach(w=>{
     const entry = MED_WEEK_STOCK.find(e=>e.주차시작일===w.start);
     const 입식두수 = entry ? (Number(entry.입식두수)||0) : 0;
+    const 추가예산 = entry ? (Number(entry.추가예산)||0) : 0;
     totalStock += 입식두수;
-    totalLimit += Math.round(입식두수 * rate);
+    totalBaseLimit += Math.round(입식두수 * rate);
+    totalExtra += 추가예산;
     totalUsed += MEDICINE.filter(r=>!isExcludedRow(r) && r.납품일자 >= w.start && r.납품일자 <= w.end).reduce((s,r)=>s+(Number(r.납품금액)||0), 0);
   });
-  return { totalStock, totalLimit, totalUsed, totalPct: totalLimit ? Math.round(totalUsed/totalLimit*100) : 0 };
+  // totalLimit은 백신 등 추가 품의로 늘어난 추가예산까지 합친 "총 사용한도"다. 이 값을 쓰는 마감월 한도
+  // 관리(맨 위)·종합 보고 쪽은 그대로 두면 자동으로 추가예산까지 반영된 한도를 보게 된다.
+  const totalLimit = totalBaseLimit + totalExtra;
+  return { totalStock, totalBaseLimit, totalExtra, totalLimit, totalUsed, totalPct: totalLimit ? Math.round(totalUsed/totalLimit*100) : 0 };
 }
 
 // ---- 주차별 입식두수 · 약품비 한도 (전체 폭을 써서 마감월 기준 주차 순서대로 한 줄로 나열) ----
@@ -2717,15 +2722,17 @@ function renderMedWeekStockCard(){
   const weekData = weeks.map(w=>{
     const entry = MED_WEEK_STOCK.find(e=>e.주차시작일===w.start);
     const 입식두수 = entry ? (Number(entry.입식두수)||0) : 0;
+    const 추가예산 = entry ? (Number(entry.추가예산)||0) : 0;
     const 사용한도 = Math.round(입식두수 * rate);
+    const 총사용한도 = 사용한도 + 추가예산;
     const 사용금액 = MEDICINE.filter(r=>!isExcludedRow(r) && r.납품일자 >= w.start && r.납품일자 <= w.end)
       .reduce((s,r)=>s+(Number(r.납품금액)||0), 0);
-    return { w, 입식두수, 사용한도, 사용금액 };
+    return { w, 입식두수, 추가예산, 사용한도, 총사용한도, 사용금액 };
   });
 
   function cardHtml(d){
-    const { w, 입식두수, 사용한도, 사용금액 } = d;
-    const pct = 사용한도 ? Math.round(사용금액/사용한도*100) : 0;
+    const { w, 입식두수, 추가예산, 사용한도, 총사용한도, 사용금액 } = d;
+    const pct = 총사용한도 ? Math.round(사용금액/총사용한도*100) : 0;
     const cls = pctClass(pct);
     return `<div class="budget-card">
       <h4>${w.label}</h4>
@@ -2735,24 +2742,34 @@ function renderMedWeekStockCard(){
         <button class="tab-btn active" style="padding:4px 10px;font-size:11px;" onclick="saveMedWeekStock('${w.start}')">저장</button>
       </div>
       <div class="amt">사용한도 <b>${fmtWon(사용한도)}</b></div>
+      <div style="display:flex;align-items:center;gap:6px;margin:6px 0;flex-wrap:wrap;">
+        <span style="font-size:12px;color:var(--muted);">추가예산</span>
+        <input type="number" class="mws-extra-input" data-week="${w.start}" value="${추가예산}" style="width:80px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 6px;font-size:12px;">
+        <button class="tab-btn active" style="padding:4px 10px;font-size:11px;" onclick="saveMedWeekExtraBudget('${w.start}')">저장</button>
+      </div>
+      <div class="amt">총 사용한도 <b>${fmtWon(총사용한도)}</b></div>
       <div class="amt">사용금액 <b>${fmtWon(사용금액)}</b></div>
       <div class="progress-track"><div class="progress-fill ${cls}" style="width:${Math.min(pct,100)}%"></div></div>
-      <div class="progress-pct">${사용한도 ? pct+'% 집행 · 잔여 '+fmtWon(사용한도-사용금액) : '입식두수·예산을 입력하면 한도가 계산돼요'}</div>
+      <div class="progress-pct">${총사용한도 ? pct+'% 집행 · 잔여 '+fmtWon(총사용한도-사용금액) : '입식두수·예산을 입력하면 한도가 계산돼요'}</div>
     </div>`;
   }
 
   const totalStock = weekData.reduce((s,d)=>s+d.입식두수, 0);
+  const totalExtra = weekData.reduce((s,d)=>s+d.추가예산, 0);
   const totalLimit = weekData.reduce((s,d)=>s+d.사용한도, 0);
+  const totalFinalLimit = weekData.reduce((s,d)=>s+d.총사용한도, 0);
   const totalUsed = weekData.reduce((s,d)=>s+d.사용금액, 0);
-  const totalPct = totalLimit ? Math.round(totalUsed/totalLimit*100) : 0;
+  const totalPct = totalFinalLimit ? Math.round(totalUsed/totalFinalLimit*100) : 0;
   const totalClsAll = pctClass(totalPct);
   const totalCardHtml = `<div class="budget-card total">
     <h4>마감월 합산</h4>
     <div class="amt">입식두수 <b>${totalStock.toLocaleString('ko-KR')}두</b></div>
     <div class="amt">사용한도 <b>${fmtWon(totalLimit)}</b></div>
+    <div class="amt">추가예산 <b>${fmtWon(totalExtra)}</b></div>
+    <div class="amt">총 사용한도 <b>${fmtWon(totalFinalLimit)}</b></div>
     <div class="amt">사용금액 <b>${fmtWon(totalUsed)}</b></div>
     <div class="progress-track"><div class="progress-fill ${totalClsAll}" style="width:${Math.min(totalPct,100)}%"></div></div>
-    <div class="progress-pct">${totalLimit ? totalPct+'% 집행 · 잔여 '+fmtWon(totalLimit-totalUsed) : '입식두수·예산을 입력하면 한도가 계산돼요'}</div>
+    <div class="progress-pct">${totalFinalLimit ? totalPct+'% 집행 · 잔여 '+fmtWon(totalFinalLimit-totalUsed) : '입식두수·예산을 입력하면 한도가 계산돼요'}</div>
   </div>`;
 
   const cardsHtml = weekData.map(cardHtml).join('') + totalCardHtml;
@@ -2783,6 +2800,19 @@ async function saveMedWeekStock(weekStart){
   const el = document.querySelector(`.mws-input[data-week="${weekStart}"]`);
   try{
     const result = await medicineApiRequest({ action:'saveWeekStock', 주차시작일: weekStart, 입식두수: el ? (Number(el.value)||0) : 0 });
+    const idx = MED_WEEK_STOCK.findIndex(w=>w.주차시작일===weekStart);
+    if(idx>-1) MED_WEEK_STOCK[idx] = result.entry; else MED_WEEK_STOCK.push(result.entry);
+    renderMedWeekStockCard();
+  }catch(e){
+    alert('저장 실패: ' + e.message);
+  }
+}
+
+// 백신 등 추가 품의로 그 주 사용한도가 늘어난 만큼을 별도로 입력/저장(입식두수와 독립적으로 관리됨)
+async function saveMedWeekExtraBudget(weekStart){
+  const el = document.querySelector(`.mws-extra-input[data-week="${weekStart}"]`);
+  try{
+    const result = await medicineApiRequest({ action:'saveWeekStock', 주차시작일: weekStart, 추가예산: el ? (Number(el.value)||0) : 0 });
     const idx = MED_WEEK_STOCK.findIndex(w=>w.주차시작일===weekStart);
     if(idx>-1) MED_WEEK_STOCK[idx] = result.entry; else MED_WEEK_STOCK.push(result.entry);
     renderMedWeekStockCard();

@@ -70,13 +70,17 @@ export default async (req, context) => {
     const { action } = body;
 
     if (action === "saveWeekStock") {
-      const { 주차시작일, 입식두수, editor } = body;
+      // 입식두수와 추가예산(백신 등 추가 품의로 늘어난 한도)은 각자 따로 입력/저장하므로, 이번 요청에
+      // 안 들어온 값은 기존 값을 그대로 유지한다(둘 다 처음 등록하는 주차면 0으로 시작).
+      const { 주차시작일, 입식두수, 추가예산, editor } = body;
       if (!주차시작일) return json({ error: "주차시작일 required" }, 400);
       const weeks = await loadWeekStock(s);
       const idx = weeks.findIndex((w) => w.주차시작일 === 주차시작일);
+      const existing = idx > -1 ? weeks[idx] : {};
       const entry = {
         주차시작일,
-        입식두수: Number(입식두수) || 0,
+        입식두수: 입식두수 !== undefined ? (Number(입식두수) || 0) : (Number(existing.입식두수) || 0),
+        추가예산: 추가예산 !== undefined ? (Number(추가예산) || 0) : (Number(existing.추가예산) || 0),
         수정자: editor || "",
         수정시각: new Date().toISOString(),
       };
