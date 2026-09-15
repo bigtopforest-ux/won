@@ -3512,8 +3512,12 @@ async function uploadShipmentAgeFile(){
 // 농장명과 다를 수 있어(예: "창신농장" vs "창신(자돈)"/"창신(비육)") resolveMedicineFarmManager와
 // 같은 3단계 방식(정확히 일치→"농장" 접미사 제거 후 일치→접두 포함관계가 하나뿐)으로 매칭하되,
 // 출하는 항상 비육 단계에서 나가므로 비육 그룹(자돈 제외)만 대상으로 한다.
-// 같은 농장에 배치(그룹)가 여러 건 있으면 어느 배치에서 출하됐는지 알 수 없으므로 매칭하지 않는다
-// (정확히 하나뿐일 때만 자동 반영 — 애매하면 미매칭으로 남겨 기존 "출하내역 엑셀 업로드"로 수동 보완).
+// 한 농장에 배치(그룹, 회차)가 보통 여러 건 누적돼 있으므로(사육현황그룹은 매 업로드마다 회차가 쌓임),
+// "같은 농장의 배치가 단 하나뿐일 때만" 매칭하면 실사용 데이터에서 거의 매칭이 안 된다(34개 농가 중
+// 32개가 이력상 배치 2건 이상). 대신 출하일(도축일) 이전에 전입된 배치 중 전입일이 가장 늦은(=가장
+// 최근에 들어온) 배치 하나로 매칭한다 — 한 농장은 보통 한 번에 한 회차만 사육하므로 "출하일 시점에
+// 사육 중이었을 배치"는 사실상 이 배치다. 같은 전입일을 가진 배치가 여럿이면(동률) 어느 배치인지
+// 알 수 없으므로 매칭하지 않는다.
 function resolveShipmentFarmToRearingFarm(rawFarm){
   const raw = String(rawFarm||'').trim();
   if(!raw) return null;
@@ -3525,22 +3529,30 @@ function resolveShipmentFarmToRearingFarm(rawFarm){
   return candidates.length===1 ? candidates[0] : null;
 }
 
-function findUniqueRearingBatchForShipment(rawFarm){
+function findRearingBatchForShipment(rawFarm, 도축일){
   const farm = resolveShipmentFarmToRearingFarm(rawFarm);
-  if(!farm) return null;
-  const batches = REARING_GROUPS.filter(g=> (g.농장명||'').trim()===farm && (g.돼지구분||'').trim()!=='자돈');
-  return batches.length===1 ? batches[0] : null;
+  if(!farm || !도축일) return null;
+  const batches = REARING_GROUPS.filter(g=> (g.농장명||'').trim()===farm && (g.돼지구분||'').trim()!=='자돈' && g.전입일 && g.전입일<=도축일);
+  if(!batches.length) return null;
+  const latestDate = batches.reduce((max,g)=> g.전입일>max ? g.전입일 : max, batches[0].전입일);
+  const latest = batches.filter(g=>g.전입일===latestDate);
+  return latest.length===1 ? latest[0] : null;
 }
 
+// 전입일은 태어난 날이 아니라 자돈 단계를 거쳐 비육농장에 들어온 날이라 전입 시점에 이미 일정 일령
+// (보통 60~80일)이 있다. 그래서 출하일령 = 전입 시점 일령(전입일령) + 전입일부터 출하일까지 경과일수로
+// 계산해야 한다(전입일령이 없는 옛 서식 데이터면 경과일수만으로는 부정확하므로 매칭하지 않는다).
 function computeAutoShipmentAge(s){
-  const group = findUniqueRearingBatchForShipment(s.농가명);
+  const group = findRearingBatchForShipment(s.농가명, s.도축일);
   if(!group || !group.전입일 || !s.도축일) return null;
+  const 전입일령 = Number(group.전입일령);
+  if(!group.전입일령 || isNaN(전입일령)) return null;
   const start = new Date(group.전입일+'T00:00:00');
   const end = new Date(s.도축일+'T00:00:00');
   if(isNaN(start.getTime()) || isNaN(end.getTime())) return null;
-  const days = Math.round((end-start)/86400000);
-  if(days < 0) return null;
-  return { 일령: days, 그룹명: group.그룹명 };
+  const elapsed = Math.round((end-start)/86400000);
+  if(elapsed < 0) return null;
+  return { 일령: 전입일령+elapsed, 그룹명: group.그룹명 };
 }
 
 // 이미 출하일령이 채워진 기록은 건드리지 않고, 자동 매칭되는 것만 저장한다.
