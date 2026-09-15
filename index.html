@@ -2168,12 +2168,16 @@ function computeMedicineBudgetTotals(month){
     return { totalLimit, totalUsed, totalPct: totalLimit ? Math.round(totalUsed/totalLimit*100) : 0 };
   }
   const all = MED_BUDGETS.filter(b=>b.구분월===month);
-  if(!all.length) return { totalLimit:0, totalUsed:0, totalPct:0 };
-  const totalRow = all.find(g=>(g.그룹||'').includes('총계'));
-  const groups = all.filter(g=>!(g.그룹||'').includes('총계'));
-  const totalLimit = totalRow ? (totalRow.한도금액||0) : groups.reduce((s,g)=>s+(g.한도금액||0),0);
-  const totalUsed = totalRow ? (totalRow.사용금액||0) : groups.reduce((s,g)=>s+(g.사용금액||0),0);
-  return { totalLimit, totalUsed, totalPct: totalLimit ? Math.round(totalUsed/totalLimit*100) : 0 };
+  if(all.length){
+    const totalRow = all.find(g=>(g.그룹||'').includes('총계'));
+    const groups = all.filter(g=>!(g.그룹||'').includes('총계'));
+    const totalLimit = totalRow ? (totalRow.한도금액||0) : groups.reduce((s,g)=>s+(g.한도금액||0),0);
+    const totalUsed = totalRow ? (totalRow.사용금액||0) : groups.reduce((s,g)=>s+(g.사용금액||0),0);
+    return { totalLimit, totalUsed, totalPct: totalLimit ? Math.round(totalUsed/totalLimit*100) : 0 };
+  }
+  // 그룹도 안 만들고 한도 엑셀도 안 올렸으면, 주차별 입식두수·약품비 한도의 마감월 합산(입식두수×예산단가)을 대신 쓴다
+  const stock = computeMedWeekStockTotals(month);
+  return { totalLimit: stock.totalLimit, totalUsed: stock.totalUsed, totalPct: stock.totalPct };
 }
 
 // 마감월(21일~익월 20일) 구분월 문자열("YYYY-MM")을 실제 달력 시작/종료일과 총 일수로 변환.
@@ -2384,6 +2388,22 @@ function renderBudgetSection(){
   // 그룹 미설정 시: 엑셀 업로드로 받은 한도 데이터로 표시 (기존 방식)
   const all = MED_BUDGETS.filter(b=>b.구분월===selectedBudgetMonth);
   if(!all.length){
+    // 그룹도 안 만들고 한도 엑셀도 안 올렸으면, 아래 "주차별 입식두수·약품비 한도"의 마감월 합산
+    // (입식두수×예산단가로 계산한 값)을 여기 맨 위에도 그대로 보여준다.
+    const stock = computeMedWeekStockTotals(selectedBudgetMonth);
+    if(stock.totalStock || stock.totalUsed){
+      const stockCls = pctClass(stock.totalPct);
+      box.innerHTML = `<div class="budget-card total">
+        <h4>마감월 합산 <span style="font-size:11px;font-weight:400;color:var(--total-text);">(아래 "주차별 입식두수·약품비 한도" 기준, 입식두수×예산단가)</span></h4>
+        <div class="amt">입식두수 <b>${stock.totalStock.toLocaleString('ko-KR')}두</b></div>
+        <div class="amt">한도금액 <b>${fmtWon(stock.totalLimit)}</b></div>
+        <div class="amt">사용금액 <b>${fmtWon(stock.totalUsed)}</b></div>
+        <div class="progress-track"><div class="progress-fill ${stockCls}" style="width:${Math.min(stock.totalPct,100)}%"></div></div>
+        <div class="progress-pct">${stock.totalLimit ? stock.totalPct+'% 집행 · 잔여 '+fmtWon(stock.totalLimit-stock.totalUsed) : '입식두수 예산(원/두)을 입력하면 한도가 계산돼요'}</div>
+      </div>`;
+      renderLimitList();
+      return;
+    }
     box.innerHTML = `<div class="budget-card">해당 월의 한도 데이터가 없습니다. 엑셀 파일을 업로드하거나, 아래 "그룹/한도 직접 설정"에서 직접 관리할 수 있어요.</div>`;
     renderLimitList();
     return;
@@ -2641,6 +2661,24 @@ function getClosingCycleWeeks(closingMonth){
     weekNum++;
   }
   return weeks;
+}
+
+// 입식두수 × 입식두수예산(원/두)으로 계산하는 마감월 합산 — "주차별 입식두수·약품비 한도"의 "마감월 합산"
+// 카드와 동일한 계산이다. 그룹/한도를 따로 설정하지 않았거나 한도 엑셀을 안 올린 팀도 한도 대비 집행
+// 현황을 바로 볼 수 있도록, 마감월 한도 관리(맨 위)와 종합 보고의 약품비 집행 현황에서 그룹/업로드 한도
+// 데이터가 없을 때는 이 계산값을 대신 쓴다.
+function computeMedWeekStockTotals(month){
+  const weeks = getClosingCycleWeeks(month);
+  const rate = MED_STOCK_RATE || 0;
+  let totalStock = 0, totalLimit = 0, totalUsed = 0;
+  weeks.forEach(w=>{
+    const entry = MED_WEEK_STOCK.find(e=>e.주차시작일===w.start);
+    const 입식두수 = entry ? (Number(entry.입식두수)||0) : 0;
+    totalStock += 입식두수;
+    totalLimit += Math.round(입식두수 * rate);
+    totalUsed += MEDICINE.filter(r=>!isExcludedRow(r) && r.납품일자 >= w.start && r.납품일자 <= w.end).reduce((s,r)=>s+(Number(r.납품금액)||0), 0);
+  });
+  return { totalStock, totalLimit, totalUsed, totalPct: totalLimit ? Math.round(totalUsed/totalLimit*100) : 0 };
 }
 
 // ---- 주차별 입식두수 · 약품비 한도 (전체 폭을 써서 마감월 기준 주차 순서대로 한 줄로 나열) ----
