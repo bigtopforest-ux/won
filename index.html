@@ -7595,8 +7595,13 @@ function computeFarmDelaySummaries(groups, targetDay, refDate){
     const 지연그룹 = ages.filter(x=>x.age >= targetDay && (Number(x.g.현재고)||0) > 0);
     const 지연개수 = 지연그룹.length;
     const 총개수 = farmGroups.length;
-    const 최고 = ages.length ? Math.max(...ages.map(x=>x.age)) : 0;
-    const 평균 = ages.length ? Math.round(ages.reduce((s,x)=>s+x.age,0)/ages.length) : 0;
+    // 최고/평균 일령은 "현재 재고가 남아있는" 그룹만 대상으로 한다. 이미 다 출하돼 현재고가 0인 그룹은
+    // 상태가 아직 '종료'로 안 바뀌어 있어도 더 이상 출하 지연 관심사가 아니므로 포함하면 카드에 찍히는
+    // 최고일령이 실제로 펼쳤을 때 보이는 지연 그룹 목록과 안 맞아 혼란을 준다(예: 이미 재고 0인 옛날 그룹
+    // 때문에 최고 332일로 나오는데 펼쳐보면 재고 남은 그룹은 208일짜리 하나뿐인 경우).
+    const stockedAges = ages.filter(x=>(Number(x.g.현재고)||0) > 0);
+    const 최고 = stockedAges.length ? Math.max(...stockedAges.map(x=>x.age)) : 0;
+    const 평균 = stockedAges.length ? Math.round(stockedAges.reduce((s,x)=>s+x.age,0)/stockedAges.length) : 0;
     // 지연 사유는 실제로 지연 판정된(목표일령 도달 + 현재고 남아있음) 그룹 중 가장 오래된 그룹의 특이사항 필드에 기록/표시함.
     // (이미 재고가 전부 빠진 그룹은 나이가 많아도 "지연"이 아니므로 심각도/사유 대상에서 제외)
     const worstDelayedEntry = 지연그룹.length ? 지연그룹.reduce((best,x)=> x.age>best.age?x:best, 지연그룹[0]) : null;
