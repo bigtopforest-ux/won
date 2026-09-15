@@ -704,6 +704,7 @@
     <button class="tab-btn" onclick="rearingWeekStep(-1)">◀ 이전주</button>
     <select id="rearingWeekSelect" onchange="onRearingWeekChange()" style="border:1px solid #e2e8e4;border-radius:8px;padding:7px 10px;font-size:13px;"></select>
     <button class="tab-btn" onclick="rearingWeekStep(1)">다음주 ▶</button>
+    <button class="tab-btn active" onclick="exportWeeklyMortalityReasonExcel(event)">📥 주차별 폐사 사유 엑셀</button>
   </div>
   <div id="rearing-week-box"></div>
 
@@ -6316,6 +6317,139 @@ async function saveRearingReason(containerId, farmGroupKey, ids){
     else renderRearingMonthSection();
   }catch(e){
     alert('저장 실패: ' + e.message);
+  }
+}
+
+// 주차별 폐사 사유 엑셀 보고서용 집계: 그 주 전체(개월령 구분 없이)를 농장+배치별로 묶고,
+// 농장명 → 전입일 순으로 정렬해서 같은 농장은 이어서 보이게 함.
+function weeklyMortalityReasonRows(events){
+  const byFarmGroup = new Map();
+  events.forEach(e=>{
+    const key = e.농장명+'|'+e.그룹명;
+    if(!byFarmGroup.has(key)) byFarmGroup.set(key, { 농장명:e.농장명, 그룹명:e.그룹명, 폐사두수:0, 원인목록:new Set(), 조치사항목록:new Set() });
+    const row = byFarmGroup.get(key);
+    row.폐사두수 += Number(e.폐사두수)||0;
+    if(e.원인) row.원인목록.add(e.원인);
+    if(e.조치사항) row.조치사항목록.add(e.조치사항);
+  });
+  const rows = [...byFarmGroup.values()].map(r=>{
+    const mKey = groupMatchKeyFromMortality({농장명:r.농장명, 그룹명:r.그룹명});
+    const group = REARING_GROUPS.find(g=> g.농장명===r.농장명 && groupMatchKeyFromRearingGroup(g)===mKey);
+    return {
+      농장명: r.농장명, 전입일: group ? group.전입일 : '', 폐사두수: r.폐사두수,
+      사유: [...r.원인목록].join(', '), 조치사항: [...r.조치사항목록].join(', '),
+    };
+  });
+  rows.sort((a,b)=>{
+    const fc = a.농장명.localeCompare(b.농장명,'ko');
+    if(fc!==0) return fc;
+    return (a.전입일||'').localeCompare(b.전입일||'');
+  });
+  return rows;
+}
+
+function buildWeeklyMortalityReasonWorkbook(XS, weekLabel, rows){
+  const ws = {};
+  const merges = [];
+  const headers = ['농장','전입일','폐사(두수)','사유','조치사항'];
+  const NCOLS = headers.length;
+  let r = 0;
+
+  function put(row, col, v, style){
+    const addr = XS.utils.encode_cell({r:row, c:col});
+    ws[addr] = { t: typeof v==='number' ? 'n' : 's', v: (v===undefined||v===null) ? '' : v, s: style };
+  }
+  function fillRow(row, style, fromCol, toCol){
+    for(let c=fromCol; c<=toCol; c++){
+      const addr = XS.utils.encode_cell({r:row, c});
+      if(!ws[addr]) ws[addr] = { t:'s', v:'', s: style };
+    }
+  }
+
+  const titleBorder = { bottom: { style:'medium', color:{rgb:REPORT_XLSX_COLORS.accent} } };
+  put(r, 0, `4팀 주차별 폐사 사유 보고 · ${weekLabel}`, { font:{bold:true, sz:16, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.title}}, alignment:{vertical:'center', horizontal:'left', indent:1}, border: titleBorder });
+  fillRow(r, { fill:{fgColor:{rgb:REPORT_XLSX_COLORS.title}}, border: titleBorder }, 1, NCOLS-1);
+  merges.push({s:{r,c:0}, e:{r,c:NCOLS-1}});
+  ws['!rows'] = ws['!rows'] || [];
+  ws['!rows'][r] = { hpt: 28 };
+  r++;
+  put(r, 0, `생성일시: ${new Date().toLocaleString('ko-KR')}`, { font:{sz:9.5, color:{rgb:'6E6260'}, italic:true}, alignment:{vertical:'center', horizontal:'left', indent:1} });
+  fillRow(r, {}, 1, NCOLS-1);
+  merges.push({s:{r,c:0}, e:{r,c:NCOLS-1}});
+  r += 2;
+
+  headers.forEach((h, c)=>{
+    put(r, c, h, { font:{bold:true, sz:10.5, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.header}}, alignment:{vertical:'center', horizontal:'center'}, border: reportXlsxBorder() });
+  });
+  r++;
+
+  const NOTE_COLS = new Set([3,4]);
+  let total폐사 = 0;
+
+  // 같은 농장이 여러 행이면 농장명 칸을 병합해서 한눈에 보이게 함
+  let i = 0;
+  while(i < rows.length){
+    const farmName = rows[i].농장명;
+    let j = i;
+    while(j < rows.length && rows[j].농장명 === farmName) j++;
+    const groupStartRow = r;
+    for(let k=i; k<j; k++){
+      const row = rows[k];
+      const alt = k % 2 === 1;
+      const cells = [row.농장명, row.전입일||'-', row.폐사두수, row.사유||'-', row.조치사항||'-'];
+      cells.forEach((v,c)=>{
+        const isNote = NOTE_COLS.has(c);
+        put(r, c, v, {
+          font:{sz:10.5, color:{rgb:'333333'}, bold: c===0},
+          fill:{fgColor:{rgb: alt?REPORT_XLSX_COLORS.altRow:'FFFFFF'}},
+          border: reportXlsxBorder(),
+          alignment:{vertical:'top', horizontal: isNote?'left':'center', indent:isNote?1:0, wrapText:isNote},
+        });
+      });
+      total폐사 += row.폐사두수;
+      r++;
+    }
+    if(j - i > 1) merges.push({s:{r:groupStartRow,c:0}, e:{r:r-1,c:0}});
+    i = j;
+  }
+
+  if(!rows.length){
+    put(r, 0, '해당 주차에 폐사 기록이 없습니다', { font:{sz:10, italic:true, color:{rgb:'6E6260'}}, border: reportXlsxBorder() });
+    for(let c=1;c<NCOLS;c++) put(r,c,'',{border:reportXlsxBorder()});
+    r++;
+  } else {
+    put(r, 0, '합계', { font:{bold:true, sz:10.5, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder(), alignment:{vertical:'center', horizontal:'center'} });
+    put(r, 1, '', { fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder() });
+    put(r, 2, total폐사, { font:{bold:true, sz:10.5, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder(), alignment:{vertical:'center', horizontal:'center'} });
+    put(r, 3, '', { fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder() });
+    put(r, 4, '', { fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder() });
+    r++;
+  }
+
+  ws['!ref'] = XS.utils.encode_range({s:{r:0,c:0}, e:{r:r, c:NCOLS-1}});
+  ws['!merges'] = merges;
+  ws['!cols'] = [{wch:16}, {wch:12}, {wch:10}, {wch:26}, {wch:46}];
+  return ws;
+}
+
+async function exportWeeklyMortalityReasonExcel(evt){
+  const btn = evt && evt.target;
+  const origText = btn ? btn.textContent : '';
+  if(btn){ btn.textContent = '엑셀 생성 중...'; btn.disabled = true; }
+  try{
+    const thisWeek = findShipWeekByStart(selectedRearingWeekStart);
+    if(!thisWeek){ alert('선택된 주차를 찾을 수 없습니다'); return; }
+    const events = REARING_MORTALITY.filter(m=> m.폐사발생일 >= thisWeek.start && m.폐사발생일 <= thisWeek.end);
+    const rows = weeklyMortalityReasonRows(events);
+    const XS = await loadXlsxStyleLib();
+    const wb = XS.utils.book_new();
+    const ws = buildWeeklyMortalityReasonWorkbook(XS, thisWeek.label, rows);
+    XS.utils.book_append_sheet(wb, ws, '폐사사유');
+    XS.writeFile(wb, `4팀_주차별폐사사유_${thisWeek.start}.xlsx`);
+  }catch(e){
+    alert('엑셀 생성 실패: ' + e.message);
+  }finally{
+    if(btn){ btn.textContent = origText; btn.disabled = false; }
   }
 }
 
