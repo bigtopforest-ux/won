@@ -171,8 +171,8 @@
 
   .delay-toolbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;background:var(--card);border:1px solid var(--border);padding:12px 14px;border-radius:12px;margin-bottom:14px;}
   .delay-toolbar-group{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-  .target-toggle{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
-  .target-toggle button{background:#fff;border:none;border-right:1px solid var(--border);padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;color:var(--muted);}
+  .target-toggle{display:flex;border:1px solid var(--border);border-radius:8px;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;max-width:100%;}
+  .target-toggle button{background:#fff;border:none;border-right:1px solid var(--border);padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;color:var(--muted);flex:0 0 auto;}
   .target-toggle button:last-child{border-right:none;}
   .target-toggle button.active{background:var(--accent);color:#fff;}
   .delay-toolbar input[type=date]{border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;}
@@ -698,12 +698,19 @@
     <div class="delay-toolbar-group">
       <span style="font-size:13px;color:var(--muted);font-weight:600;">출하 목표</span>
       <div class="target-toggle" id="shipRiskTargetToggle">
+        <button type="button" data-val="140" onclick="setShipRiskTarget(140)">140</button>
+        <button type="button" data-val="145" onclick="setShipRiskTarget(145)">145</button>
         <button type="button" data-val="150" onclick="setShipRiskTarget(150)">150</button>
+        <button type="button" data-val="155" onclick="setShipRiskTarget(155)">155</button>
+        <button type="button" data-val="160" onclick="setShipRiskTarget(160)">160</button>
+        <button type="button" data-val="165" onclick="setShipRiskTarget(165)">165</button>
         <button type="button" data-val="170" onclick="setShipRiskTarget(170)">170</button>
         <button type="button" data-val="175" onclick="setShipRiskTarget(175)">175</button>
         <button type="button" data-val="180" class="active" onclick="setShipRiskTarget(180)">180</button>
         <button type="button" data-val="185" onclick="setShipRiskTarget(185)">185</button>
         <button type="button" data-val="190" onclick="setShipRiskTarget(190)">190</button>
+        <button type="button" data-val="195" onclick="setShipRiskTarget(195)">195</button>
+        <button type="button" data-val="200" onclick="setShipRiskTarget(200)">200</button>
       </div>
       <span style="font-size:13px;color:var(--muted);">일</span>
     </div>
