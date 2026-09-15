@@ -5916,7 +5916,7 @@ function buildLinkedFarms(groups){
     const bgroups = byBiyukFarm[bf];
     const bIn = bgroups.reduce((s,g)=>s+(Number(g.전입두수)||0),0);
     const bDead = bgroups.reduce((s,g)=>s+computeEarly30Count(g),0);
-    return { farm: bf, totalIn: bIn, 현재고: bgroups.reduce((s,g)=>s+(Number(g.현재고)||0),0), early30Dead: bDead, rate: bIn ? (bDead/bIn*100) : 0, groupCount: bgroups.length };
+    return { farm: bf, totalIn: bIn, 현재고: bgroups.reduce((s,g)=>s+(Number(g.현재고)||0),0), early30Dead: bDead, rate: bIn ? (bDead/bIn*100) : 0, groupCount: bgroups.length, groups: bgroups };
   });
 }
 
@@ -5988,24 +5988,59 @@ function togglePigletMortFarm(farm){
   renderPigletFarmMortalityBox('report-piglet-mortality-box');
 }
 
+// 자돈농장 카드 안에서, 연결된 비육농장 행을 한 번 더 클릭하면 그 비육농장의 배치(그룹)별 상세가 펼쳐짐.
+let pigletMortLinkedExpanded = {}; // key = `${자돈농장}::${비육농장}`
+
+function togglePigletMortLinkedFarm(sourceFarm, bfFarm){
+  const key = `${sourceFarm}::${bfFarm}`;
+  pigletMortLinkedExpanded[key] = !pigletMortLinkedExpanded[key];
+  renderPigletFarmMortalityBox('rearing-piglet-mortality-box');
+  renderPigletFarmMortalityBox('report-piglet-mortality-box');
+}
+
 function renderPigletMortDetail(f){
   if(!f.linkedFarms.length){
     return `<div onclick="event.stopPropagation()" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
       <p style="font-size:12.5px;color:var(--muted);">아직 이 자돈농장과 연결된 비육농장 데이터가 없습니다. (사육그룹 엑셀의 '자돈농장명' 항목이 채워지면 자동으로 연결됩니다)</p>
     </div>`;
   }
-  const rows = f.linkedFarms.slice().sort((a,b)=>b.rate-a.rate).map(bf=>`
-    <tr>
+  const safeSource = f.farm.replace(/'/g,"\\'");
+  const rows = f.linkedFarms.slice().sort((a,b)=>b.rate-a.rate).map(bf=>{
+    const key = `${f.farm}::${bf.farm}`;
+    const expanded = !!pigletMortLinkedExpanded[key];
+    const safeBf = bf.farm.replace(/'/g,"\\'");
+    const groupRows = !expanded ? '' : bf.groups.slice().sort((a,b)=>(a.전입일||'').localeCompare(b.전입일||'')).map(g=>{
+      const early30 = computeEarly30Count(g);
+      const gr = getRearingSurvivalRate(g);
+      return `<tr>
+        <td>${g.그룹명||'-'}</td>
+        <td style="color:var(--muted);">${g.전입일||'-'}</td>
+        <td style="text-align:right;">${(Number(g.전입두수)||0).toLocaleString('ko-KR')}두</td>
+        <td style="text-align:right;">${(Number(g.현재고)||0).toLocaleString('ko-KR')}두</td>
+        <td style="text-align:right;${survivalRateStyle(gr)}">${gr===null?'-':gr.toFixed(1)+'%'}</td>
+        <td style="text-align:right;">${early30.toLocaleString('ko-KR')}두</td>
+      </tr>`;
+    }).join('');
+    const detailRow = !expanded ? '' : `<tr><td colspan="6" style="padding:8px 8px 10px 20px;background:var(--bg);">
+      <div class="table-wrap" style="margin:0;"><table style="border:1px solid var(--border);">
+        <thead><tr><th>그룹명</th><th>전입일</th><th style="text-align:right;">전입두수</th><th style="text-align:right;">현재고</th><th style="text-align:right;">육성율</th><th style="text-align:right;">1개월 이내 폐사두수</th></tr></thead>
+        <tbody>${groupRows}</tbody>
+      </table></div>
+    </td></tr>`;
+    return `
+    <tr onclick="event.stopPropagation();togglePigletMortLinkedFarm('${safeSource}','${safeBf}')" style="cursor:pointer;">
       <td>${escapeHtml(bf.farm)}</td>
       <td style="text-align:center;" onclick="event.stopPropagation()">
-        <input type="text" value="${escapeHtml(FARM_MANAGERS[bf.farm]||'')}" placeholder="담당자" onclick="event.stopPropagation()" onchange="saveFarmManager('${bf.farm.replace(/'/g,"\\'")}', this.value)" style="font-size:11px;border:1px solid var(--border);border-radius:6px;padding:2px 6px;width:60px;text-align:center;">
+        <input type="text" value="${escapeHtml(FARM_MANAGERS[bf.farm]||'')}" placeholder="담당자" onclick="event.stopPropagation()" onchange="saveFarmManager('${safeBf}', this.value)" style="font-size:11px;border:1px solid var(--border);border-radius:6px;padding:2px 6px;width:60px;text-align:center;">
       </td>
       <td style="text-align:center;">${bf.groupCount}개</td>
       <td style="text-align:center;">${bf.현재고.toLocaleString('ko-KR')}두</td>
       <td style="text-align:center;${bf.rate>=4?'color:var(--danger);font-weight:700;':''}">${bf.rate.toFixed(1)}%</td>
       <td style="text-align:center;">${bf.early30Dead.toLocaleString('ko-KR')}두</td>
-    </tr>`).join('');
+    </tr>${detailRow}`;
+  }).join('');
   return `<div onclick="event.stopPropagation()" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+    <p style="font-size:11px;color:var(--muted);margin:0 0 6px;">비육농장 행을 클릭하면 배치(그룹)별 상세가 펼쳐집니다.</p>
     <div class="table-wrap"><table style="width:100%;font-size:13px;">
       <thead><tr><th>비육농장</th><th>담당자</th><th>그룹수</th><th>현재고</th><th>1개월 이내 폐사율</th><th>1개월 이내 폐사두수</th></tr></thead>
       <tbody>${rows}</tbody>
@@ -6451,18 +6486,24 @@ function renderMonthlyIntakeBox(){
 function normalizeGroupNameKey(v){
   return (v===undefined||v===null ? '' : String(v)).trim().toUpperCase();
 }
+// "그룹보고서 전입현황" 서식(과 폐사내역 파일)은 그룹명 앞에 농장명이 한 번 더 붙는다("농장명-원본그룹명").
+// "유사 배치 중복 정리"로 사육그룹내역 쪽에 이 형태가 그대로 남아있을 수도 있어서, 앞에 "농장명-"이
+// 남아있는 동안 반복해서 떼어내야 두 파일의 그룹명이 어느 형태로 저장돼 있든 항상 같은 키로 수렴한다.
+function stripFarmPrefixLoop(name, farm){
+  let n = (name===undefined||name===null ? '' : String(name)).trim();
+  const f = (farm===undefined||farm===null ? '' : String(farm)).trim();
+  while(f && n.startsWith(f + '-')){
+    n = n.slice(f.length + 1);
+  }
+  return n;
+}
 function groupMatchKeyFromRearingGroup(g){
-  const name = (g && g.그룹명 || '').trim();
-  return normalizeGroupNameKey(name.replace(/\(\d+\)\s*$/, '')); // 끝의 (차수) 제거
+  const name = (g && g.그룹명 || '').trim().replace(/\(\d+\)\s*$/, ''); // 끝의 (차수) 제거
+  return normalizeGroupNameKey(stripFarmPrefixLoop(name, g && g.농장명));
 }
 function groupMatchKeyFromMortality(m){
   const name = (m && m.그룹명 || '').trim();
-  const farm = (m && m.농장명 || '').trim();
-  let stripped = name;
-  if(farm && stripped.startsWith(farm + '-')){
-    stripped = stripped.slice(farm.length + 1); // 앞의 "농장명-" 중복 접두 제거
-  }
-  return normalizeGroupNameKey(stripped);
+  return normalizeGroupNameKey(stripFarmPrefixLoop(name, m && m.농장명));
 }
 
 function computeEarly30Count(group){
