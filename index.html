@@ -3584,7 +3584,12 @@ async function confirmShipmentSave(){
     const companyEl = document.getElementById('pending-육가공업체');
     const weightEl = document.getElementById('pending-총생체중');
     const chosen = sel ? sel.value : '';
-    if(companyEl && companyEl.value) pendingShipmentRecord.육가공업체 = companyEl.value;
+    const chosenCompany = companyEl ? companyEl.value : '';
+    if(!SHIP_COMPANY_LIST.includes(chosenCompany)){
+      statusEl.textContent = '육가공업체를 선택해야 저장할 수 있습니다 (기타 제외, 약감포크/동아미트/이서푸드/영천/신선 중 하나).';
+      return;
+    }
+    pendingShipmentRecord.육가공업체 = chosenCompany;
     if(!chosen){
       statusEl.textContent = '지역부장을 선택해야 저장할 수 있습니다.';
       return;
