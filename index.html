@@ -5922,8 +5922,18 @@ function buildLinkedFarms(groups){
 
 // 반환값: { sources: [자돈농장/전입처 카드 배열], unmatchedFarms: [매칭 안 된 비육그룹을 농장별로 묶은 배열] }
 // 같은 농장이 sources 한 군데의 linkedFarms와 unmatchedFarms에 동시에 나올 수 있음(그 농장 그룹 중 일부만 매칭된 경우) - 정상 동작.
+// "1개월 이내 폐사율"은 최근 입식분의 초기 폐사를 보기 위한 지표라, 입식일이 오래된 그룹까지 계속
+// 남아있으면 의미가 없어진다. 그래서 오늘 기준 최근 1개월(예: 9월 15일이면 8월 15일~9월 15일) 안에
+// 전입한 그룹만 이 섹션의 대상으로 삼는다.
+function pigletMortalityIntakeWindow(){
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth()-1, today.getDate());
+  return { start: localDateStr(start), end: localDateStr(today) };
+}
+
 function computePigletFarmMortality(){
-  const activeGroups = REARING_GROUPS.filter(g=>g.상태==='사육중');
+  const { start, end } = pigletMortalityIntakeWindow();
+  const activeGroups = REARING_GROUPS.filter(g=>g.상태==='사육중' && g.전입일 && g.전입일>=start && g.전입일<=end);
   const pigletGroups = activeGroups.filter(g=>(g.돼지구분||'').trim()==='자돈');
   const biyukGroups = activeGroups.filter(g=>(g.돼지구분||'').trim()!=='자돈');
 
@@ -6111,8 +6121,10 @@ function renderPigletFarmMortalityBox(containerId){
   const box = document.getElementById(containerId);
   if(!box) return;
   const { sources, unmatchedFarms } = computePigletFarmMortality();
+  const { start, end } = pigletMortalityIntakeWindow();
+  const rangeLine = `<p style="font-size:11px;color:var(--muted);margin:0 0 8px;">전입일 ${start} ~ ${end} 구간(최근 1개월)만 대상입니다.</p>`;
   if(!sources.length && !unmatchedFarms.length){
-    box.innerHTML = `<p style="color:var(--muted);font-size:13px;padding:10px 0;">사육중인 자돈농장 데이터가 없습니다.</p>`;
+    box.innerHTML = rangeLine + `<p style="color:var(--muted);font-size:13px;padding:10px 0;">최근 1개월(${start} ~ ${end}) 안에 전입한 자돈농장 데이터가 없습니다.</p>`;
     return;
   }
   const data = sources.slice().sort((a,b)=>(b.rate??-1)-(a.rate??-1));
@@ -6144,7 +6156,7 @@ function renderPigletFarmMortalityBox(containerId){
     ${unmatchedFarms.slice().sort((a,b)=>a.farm.localeCompare(b.farm,'ko')).map(f=>renderUnmatchedPigletFarmCard(f, knownLabels, containerId)).join('')}
   ` : '';
 
-  box.innerHTML = sourceCards + unmatchedSection + `<div style="margin-top:12px;">${renderPigletTotalRow(sources, unmatchedFarms)}</div>`;
+  box.innerHTML = rangeLine + sourceCards + unmatchedSection + `<div style="margin-top:12px;">${renderPigletTotalRow(sources, unmatchedFarms)}</div>`;
 }
 
 // ---- 비육농장 현황 (자돈농장별 1개월 이내 폐사비율과 월별 전입 현황 사이) ----
