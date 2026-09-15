@@ -436,6 +436,7 @@
     <div class="chart-card"><h3>전입두수기준 약품비 사용금액</h3><div class="count-tag" id="chartMedRegionInStat"></div><canvas id="chartMedRegionIn"></canvas></div>
     <div class="chart-card"><h3>출하두수기준 약품비 사용금액</h3><div class="count-tag" id="chartMedRegionOutStat"></div><canvas id="chartMedRegionOut"></canvas></div>
   </div>
+  <div id="med-region-usage-table-box"></div>
 
   <div class="section-title">주차별 입식두수 · 약품비 한도</div>
   <div id="med-week-stock-box"></div>
@@ -2286,6 +2287,52 @@ function renderMedRegionUsageCharts(){
   medRegionCharts.stock = renderOne('chartMedRegionStock','chartMedRegionStockStat', d.재고두수, d.stockPerHead, '재고두수기준 두당 약품비');
   medRegionCharts.in = renderOne('chartMedRegionIn','chartMedRegionInStat', d.전입두수, d.inPerHead, '전입두수기준 두당 약품비');
   medRegionCharts.out = renderOne('chartMedRegionOut','chartMedRegionOutStat', d.출하두수, d.outPerHead, '출하두수기준 두당 약품비');
+
+  renderMedRegionUsageTable(d, month);
+}
+
+// 차트 뒤에 지역부장별 실제 수치(현재 재고두수/월 전입두수/월 출하두수/사용금액)를 표로 그대로 보여줘서
+// 위 3개 차트의 두당 금액이 어떤 두수·금액으로 계산된 것인지 바로 확인할 수 있게 한다.
+function renderMedRegionUsageTable(d, month){
+  const box = document.getElementById('med-region-usage-table-box');
+  if(!box) return;
+  if(!d.people.length){
+    box.innerHTML = `<p class="upload-status">${month||'선택된 마감월'} 기준으로 집계할 지역부장별 데이터가 없습니다.</p>`;
+    return;
+  }
+  const rows = d.people.map((p,i)=>`<tr>
+    <td>${escapeHtml(p)}</td>
+    <td style="text-align:right;">${(d.재고두수[p]||0).toLocaleString('ko-KR')}두</td>
+    <td style="text-align:right;">${(d.전입두수[p]||0).toLocaleString('ko-KR')}두</td>
+    <td style="text-align:right;">${(d.출하두수[p]||0).toLocaleString('ko-KR')}두</td>
+    <td style="text-align:right;">${fmtWon(d.사용금액[p]||0)}</td>
+    <td style="text-align:right;">${d.stockPerHead[i]?fmtWon(d.stockPerHead[i]):'-'}</td>
+    <td style="text-align:right;">${d.inPerHead[i]?fmtWon(d.inPerHead[i]):'-'}</td>
+    <td style="text-align:right;">${d.outPerHead[i]?fmtWon(d.outPerHead[i]):'-'}</td>
+  </tr>`).join('');
+  const totalStock = Object.values(d.재고두수).reduce((s,v)=>s+v,0);
+  const totalIn = Object.values(d.전입두수).reduce((s,v)=>s+v,0);
+  const totalOut = Object.values(d.출하두수).reduce((s,v)=>s+v,0);
+  const totalCost = Object.values(d.사용금액).reduce((s,v)=>s+v,0);
+  box.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr>
+      <th style="text-align:left;">지역부장</th><th style="text-align:right;">현재 재고두수</th><th style="text-align:right;">월 전입두수</th><th style="text-align:right;">월 출하두수</th>
+      <th style="text-align:right;">약품비 사용금액</th><th style="text-align:right;">재고두수기준 두당</th><th style="text-align:right;">전입두수기준 두당</th><th style="text-align:right;">출하두수기준 두당</th>
+    </tr></thead>
+    <tbody>
+      ${rows}
+      <tr class="total-row">
+        <td>합계</td>
+        <td style="text-align:right;">${totalStock.toLocaleString('ko-KR')}두</td>
+        <td style="text-align:right;">${totalIn.toLocaleString('ko-KR')}두</td>
+        <td style="text-align:right;">${totalOut.toLocaleString('ko-KR')}두</td>
+        <td style="text-align:right;">${fmtWon(totalCost)}</td>
+        <td style="text-align:right;">${totalStock?fmtWon(Math.round(totalCost/totalStock)):'-'}</td>
+        <td style="text-align:right;">${totalIn?fmtWon(Math.round(totalCost/totalIn)):'-'}</td>
+        <td style="text-align:right;">${totalOut?fmtWon(Math.round(totalCost/totalOut)):'-'}</td>
+      </tr>
+    </tbody>
+  </table></div>`;
 }
 
 function renderBudgetSection(){
