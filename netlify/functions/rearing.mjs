@@ -457,6 +457,18 @@ export default async (req, context) => {
       return json({ ok: true, group: groups[idx] });
     }
 
+    if (action === "saveGroupIntakeNotes") {
+      // 자돈 전입 관리 보고서에서 배치별 전입시 상태/질병사항/조치사항·특이사항을 입력/수정
+      const { 그룹명, 전입시상태, 질병사항, 조치사항 } = body;
+      if (!그룹명) return json({ error: "그룹명 required" }, 400);
+      const groups = await loadGroups(s);
+      const idx = groups.findIndex((g) => groupKey(g.그룹명) === groupKey(그룹명));
+      if (idx === -1) return json({ error: "not found" }, 404);
+      groups[idx] = { ...groups[idx], 전입시상태: 전입시상태 || "", 질병사항: 질병사항 || "", 조치사항: 조치사항 || "", 수정자: editor || "", 수정시각: now };
+      await s.setJSON(GROUPS_KEY, groups);
+      return json({ ok: true, group: groups[idx] });
+    }
+
     if (action === "uploadDiagnosisImage") {
       // 병성 관리내역 이미지: base64로 받아 별도 Blobs store(바이너리)에 저장하고,
       // 그룹 레코드의 병성이미지목록 배열에 참조(key/파일명/업로드정보)만 남긴다.

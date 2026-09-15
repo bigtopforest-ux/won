@@ -701,6 +701,14 @@
   <p style="font-size:12px;color:var(--muted);margin:2px 0 6px;">자돈농장 카드를 클릭하면 해당 자돈농장에서 넘어온 비육농장별 1개월 이내 폐사비율이 펼쳐집니다.</p>
   <div id="rearing-piglet-mortality-box"></div>
 
+  <div style="display:flex;align-items:center;gap:10px;margin:18px 0 8px;">
+    <div class="section-title" style="margin:0;">자돈 전입 관리 보고서</div>
+    <span style="font-size:12px;color:var(--muted);">(천하,태평·오케이·돈앤돈·신한양·한양·해오름·창신)</span>
+    <div style="flex:1;"></div>
+    <button class="tab-btn active" onclick="exportPigletIntakeReportExcel(event)">📥 자돈 전입 관리 보고서 엑셀</button>
+  </div>
+  <div id="piglet-intake-report-box"></div>
+
   <div class="section-title">비육농장 현황</div>
   <p style="font-size:12px;color:var(--muted);margin:2px 0 6px;">사육중인 농장을 비육/자돈 구분과 함께 농장별로 모아서 보여줍니다. 농장(행)을 클릭하면 배치(그룹)별 상세가 펼쳐집니다.</p>
   <div id="biyuk-farm-status-box"></div>
@@ -5992,6 +6000,68 @@ function computePigletFarmMortality(){
   return { sources, unmatchedFarms };
 }
 
+// ==================== 자돈 전입 관리 보고서 (천하,태평/오케이/돈앤돈/신한양/한양/해오름/창신 7개 자돈장만) ====================
+// 자돈농장별 1개월 이내 폐사비율과 같은 최근 1개월 전입 구간을 쓰되, 이 7개 자돈장(전입처)에
+// 해당하는 배치만 추려서 모돈장→자돈장 단위로 묶은 보고서를 별도로 제공한다.
+const PIGLET_REPORT_BUCKETS = ['천하,태평', '오케이', '돈앤돈', '신한양', '한양', '해오름', '창신'];
+// "신한양"이 "한양"을 문자열로 포함하므로 신한양을 먼저 검사해야 한양 버킷으로 잘못 묶이지 않는다.
+function pigletReportBucketOf(sourceText){
+  const s = String(sourceText||'');
+  if(!s) return null;
+  if(/천하|태평/.test(s)) return '천하,태평';
+  if(/오케이/.test(s)) return '오케이';
+  if(/돈앤돈/.test(s)) return '돈앤돈';
+  if(/신한양/.test(s)) return '신한양';
+  if(/한양/.test(s)) return '한양';
+  if(/해오름/.test(s)) return '해오름';
+  if(/창신/.test(s)) return '창신';
+  return null;
+}
+// 모돈장(상위 분류)은 현재 시스템 어디에도 저장돼 있지 않아서, 사용자가 준 참고 보고서 이미지를 보고
+// 그대로 추정해 고정 매핑한 것이다(새빛농장=신한양+한양, 하이팜=창신+돈앤돈+오케이, 포크랜드=태평,
+// 천하25=천하, 해오름=해오름). 나중에 실제 분류와 다르면 이 매핑만 고치면 된다.
+function pigletReportMotherFarmOf(sourceText){
+  const s = String(sourceText||'');
+  if(/신한양|한양/.test(s)) return '새빛농장';
+  if(/창신|돈앤돈|오케이/.test(s)) return '하이팜';
+  if(/천하/.test(s)) return '천하25';
+  if(/태평/.test(s)) return '포크랜드';
+  if(/해오름/.test(s)) return '해오름';
+  return '기타';
+}
+const PIGLET_REPORT_MOTHER_ORDER = ['새빛농장', '하이팜', '포크랜드', '해오름', '천하25', '기타'];
+const PIGLET_REPORT_LOW_WEIGHT = 26; // 전입체중이 이 값(kg) 미만이면 저체중으로 강조 표시
+
+function computePigletIntakeReportRows(){
+  const { start, end } = pigletMortalityIntakeWindow();
+  const groups = REARING_GROUPS.filter(g=>{
+    if((g.돼지구분||'').trim()==='자돈') return false;
+    if(g.상태!=='사육중') return false;
+    if(!g.전입일 || g.전입일<start || g.전입일>end) return false;
+    return !!pigletReportBucketOf(g.자돈농장명);
+  });
+  const rows = groups.map(g=>{
+    const 전입체중 = (g.두당체중!==undefined && g.두당체중!=='') ? Number(g.두당체중) : null;
+    return {
+      motherFarm: pigletReportMotherFarmOf(g.자돈농장명),
+      bucket: pigletReportBucketOf(g.자돈농장명),
+      farm: g.농장명||'-', group: g.그룹명, pen: g.저장위치||'-',
+      전입일: g.전입일||'-', 전입두수: Number(g.전입두수)||0, 전입일령: g.전입일령||'-',
+      전입체중, lowWeight: 전입체중!==null && 전입체중<PIGLET_REPORT_LOW_WEIGHT,
+      전입시상태: g.전입시상태||'', 질병사항: g.질병사항||'', 조치사항: g.조치사항||'',
+      폐사두수: Number(g.폐사두수)||0, 현재고: Number(g.현재고)||0, 육성률: getRearingSurvivalRate(g),
+    };
+  });
+  rows.sort((a,b)=>{
+    const mo = PIGLET_REPORT_MOTHER_ORDER.indexOf(a.motherFarm) - PIGLET_REPORT_MOTHER_ORDER.indexOf(b.motherFarm);
+    if(mo!==0) return mo;
+    const bo = PIGLET_REPORT_BUCKETS.indexOf(a.bucket) - PIGLET_REPORT_BUCKETS.indexOf(b.bucket);
+    if(bo!==0) return bo;
+    return (a.전입일||'').localeCompare(b.전입일||'');
+  });
+  return rows;
+}
+
 function togglePigletMortFarm(farm){
   pigletMortExpanded[farm] = !pigletMortExpanded[farm];
   renderPigletFarmMortalityBox('rearing-piglet-mortality-box');
@@ -6056,6 +6126,239 @@ function renderPigletMortDetail(f){
       <tbody>${rows}</tbody>
     </table></div>
   </div>`;
+}
+
+// 배치(그룹) 행을 클릭하면 전입시 상태/질병사항/조치사항·특이사항을 입력하는 편집 행이 펼쳐짐
+let pigletIntakeReportEditingKey = null; // 편집 중인 그룹명(한 번에 하나만)
+
+function togglePigletIntakeReportEdit(groupName){
+  pigletIntakeReportEditingKey = pigletIntakeReportEditingKey===groupName ? null : groupName;
+  renderPigletIntakeReportBox();
+}
+
+async function savePigletIntakeNotes(groupName){
+  const safeId = safeDomId(groupName);
+  const 전입시상태 = (document.getElementById(`pir-status-${safeId}`)||{}).value || '';
+  const 질병사항 = (document.getElementById(`pir-disease-${safeId}`)||{}).value || '';
+  const 조치사항 = (document.getElementById(`pir-action-${safeId}`)||{}).value || '';
+  const statusEl = document.getElementById(`pir-status-msg-${safeId}`);
+  if(statusEl) statusEl.textContent = '저장 중...';
+  try{
+    await rearingApiRequest({ action:'saveGroupIntakeNotes', 그룹명: groupName, 전입시상태, 질병사항, 조치사항 });
+    const idx = REARING_GROUPS.findIndex(g=>g.그룹명===groupName);
+    if(idx>-1){ REARING_GROUPS[idx].전입시상태 = 전입시상태; REARING_GROUPS[idx].질병사항 = 질병사항; REARING_GROUPS[idx].조치사항 = 조치사항; }
+    pigletIntakeReportEditingKey = null;
+    renderPigletIntakeReportBox();
+  }catch(e){
+    if(statusEl) statusEl.textContent = '저장 실패: ' + e.message;
+  }
+}
+
+function renderPigletIntakeReportBox(){
+  const box = document.getElementById('piglet-intake-report-box');
+  if(!box) return;
+  const { start, end } = pigletMortalityIntakeWindow();
+  const rows = computePigletIntakeReportRows();
+  const rangeLine = `<p style="font-size:11px;color:var(--muted);margin:0 0 8px;">전입일 ${start} ~ ${end} 구간(최근 1개월) · ${PIGLET_REPORT_BUCKETS.join(' · ')} 7개 자돈장만 대상입니다. 배치 행을 클릭하면 전입시 상태/질병사항/조치사항을 입력할 수 있어요.</p>`;
+  if(!rows.length){
+    box.innerHTML = rangeLine + `<p style="color:var(--muted);font-size:13px;padding:10px 0;">해당 기간·자돈장에 해당하는 배치가 없습니다.</p>`;
+    return;
+  }
+
+  const headCells = ['No','모돈장','자돈장','비육장','돈사','전입일','전입두수','전입일령','전입체중(kg)','전입시 상태','질병사항','조치사항/특이사항','폐사두수','현재고','육성률'];
+  let bodyHtml = '';
+  let no = 0;
+  let i = 0;
+  const grand = { 전입두수:0, 폐사두수:0, 현재고:0 };
+  while(i < rows.length){
+    const mf = rows[i].motherFarm;
+    let j = i;
+    const sub = { 전입두수:0, 폐사두수:0, 현재고:0 };
+    while(j < rows.length && rows[j].motherFarm === mf){
+      const row = rows[j];
+      no++;
+      sub.전입두수 += row.전입두수; sub.폐사두수 += row.폐사두수; sub.현재고 += row.현재고;
+      const editing = pigletIntakeReportEditingKey === row.group;
+      const safeId = safeDomId(row.group);
+      const weightStyle = row.lowWeight ? 'background:var(--danger-light);color:var(--danger);font-weight:700;' : '';
+      const grText = row.육성률===null ? '-' : row.육성률.toFixed(1)+'%';
+      bodyHtml += `<tr onclick="togglePigletIntakeReportEdit('${row.group.replace(/'/g,"\\'")}')" style="cursor:pointer;">
+        <td style="text-align:center;">${no}</td>
+        <td>${escapeHtml(mf)}</td>
+        <td>${escapeHtml(row.bucket)}</td>
+        <td>${escapeHtml(row.farm)}</td>
+        <td style="text-align:center;">${escapeHtml(row.pen)}</td>
+        <td style="text-align:center;">${row.전입일}</td>
+        <td style="text-align:right;">${row.전입두수.toLocaleString('ko-KR')}</td>
+        <td style="text-align:center;">${row.전입일령}</td>
+        <td style="text-align:center;${weightStyle}">${row.전입체중===null?'-':row.전입체중}</td>
+        <td style="max-width:140px;white-space:normal;font-size:12px;">${escapeHtml(row.전입시상태)||'-'}</td>
+        <td style="max-width:140px;white-space:normal;font-size:12px;">${escapeHtml(row.질병사항)||'-'}</td>
+        <td style="max-width:220px;white-space:normal;font-size:12px;">${escapeHtml(row.조치사항)||'-'}</td>
+        <td style="text-align:right;">${row.폐사두수.toLocaleString('ko-KR')}</td>
+        <td style="text-align:right;">${row.현재고.toLocaleString('ko-KR')}</td>
+        <td style="text-align:center;">${grText}</td>
+      </tr>`;
+      if(editing){
+        bodyHtml += `<tr onclick="event.stopPropagation()"><td colspan="15" style="background:var(--bg);padding:10px 14px;">
+          <div class="delay-reason-box" style="margin:0;display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:10px;">
+            <div><label>전입시 상태</label><textarea id="pir-status-${safeId}" rows="2">${escapeHtml(row.전입시상태)}</textarea></div>
+            <div><label>질병사항</label><textarea id="pir-disease-${safeId}" rows="2">${escapeHtml(row.질병사항)}</textarea></div>
+            <div><label>조치사항 / 특이사항</label><textarea id="pir-action-${safeId}" rows="2">${escapeHtml(row.조치사항)}</textarea></div>
+          </div>
+          <div style="margin-top:8px;"><button type="button" class="tab-btn active" onclick="savePigletIntakeNotes('${row.group.replace(/'/g,"\\'")}')">저장</button> <span class="upload-status" id="pir-status-msg-${safeId}"></span></div>
+        </td></tr>`;
+      }
+      j++;
+    }
+    const subGr = sub.전입두수 ? (sub.현재고/sub.전입두수*100) : 0;
+    bodyHtml += `<tr class="total-row">
+      <td colspan="3">${escapeHtml(mf)} 소계</td>
+      <td colspan="3"></td>
+      <td style="text-align:right;">${sub.전입두수.toLocaleString('ko-KR')}</td>
+      <td colspan="3"></td>
+      <td style="text-align:right;">${sub.폐사두수.toLocaleString('ko-KR')}</td>
+      <td style="text-align:right;">${sub.현재고.toLocaleString('ko-KR')}</td>
+      <td style="text-align:center;">${subGr.toFixed(1)}%</td>
+    </tr>`;
+    grand.전입두수 += sub.전입두수; grand.폐사두수 += sub.폐사두수; grand.현재고 += sub.현재고;
+    i = j;
+  }
+  const grandGr = grand.전입두수 ? (grand.현재고/grand.전입두수*100) : 0;
+  bodyHtml += `<tr class="total-row">
+    <td colspan="3">전체 합계 / 가중평균</td>
+    <td colspan="3"></td>
+    <td style="text-align:right;">${grand.전입두수.toLocaleString('ko-KR')}</td>
+    <td colspan="3"></td>
+    <td style="text-align:right;">${grand.폐사두수.toLocaleString('ko-KR')}</td>
+    <td style="text-align:right;">${grand.현재고.toLocaleString('ko-KR')}</td>
+    <td style="text-align:center;">${grandGr.toFixed(1)}%</td>
+  </tr>`;
+
+  box.innerHTML = rangeLine + `<div class="table-wrap"><table>
+    <thead><tr>${headCells.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${bodyHtml}</tbody>
+  </table></div>`;
+}
+
+function buildPigletIntakeReportWorkbook(XS, rangeLabel, rows){
+  const ws = {};
+  const merges = [];
+  const headers = ['No','모돈장','자돈장','비육장','돈사','전입일','전입두수','전입일령','전입체중(kg)','전입시 상태','질병사항','조치사항/특이사항','폐사두수','현재고','육성률'];
+  const NCOLS = headers.length;
+  let r = 0;
+
+  function put(row, col, v, style){
+    const addr = XS.utils.encode_cell({r:row, c:col});
+    ws[addr] = { t: typeof v==='number' ? 'n' : 's', v: (v===undefined||v===null) ? '' : v, s: style };
+  }
+  function fillRow(row, style, fromCol, toCol){
+    for(let c=fromCol; c<=toCol; c++){
+      const addr = XS.utils.encode_cell({r:row, c});
+      if(!ws[addr]) ws[addr] = { t:'s', v:'', s: style };
+    }
+  }
+
+  const titleBorder = { bottom: { style:'medium', color:{rgb:REPORT_XLSX_COLORS.accent} } };
+  put(r, 0, `4팀 자돈 전입 관리 보고서 · ${rangeLabel}`, { font:{bold:true, sz:16, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.title}}, alignment:{vertical:'center', horizontal:'left', indent:1}, border: titleBorder });
+  fillRow(r, { fill:{fgColor:{rgb:REPORT_XLSX_COLORS.title}}, border: titleBorder }, 1, NCOLS-1);
+  merges.push({s:{r,c:0}, e:{r,c:NCOLS-1}});
+  ws['!rows'] = ws['!rows'] || [];
+  ws['!rows'][r] = { hpt: 28 };
+  r++;
+  put(r, 0, `생성일시: ${new Date().toLocaleString('ko-KR')}`, { font:{sz:9.5, color:{rgb:'6E6260'}, italic:true}, alignment:{vertical:'center', horizontal:'left', indent:1} });
+  fillRow(r, {}, 1, NCOLS-1);
+  merges.push({s:{r,c:0}, e:{r,c:NCOLS-1}});
+  r += 2;
+
+  headers.forEach((h, c)=>{
+    put(r, c, h, { font:{bold:true, sz:10.5, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.header}}, alignment:{vertical:'center', horizontal:'center'}, border: reportXlsxBorder() });
+  });
+  r++;
+
+  const LOW_WEIGHT_FILL = { fgColor:{rgb:'F4A6A6'} };
+  const grand = { 전입두수:0, 폐사두수:0, 현재고:0 };
+  let no = 0;
+  let i = 0;
+  while(i < rows.length){
+    const mf = rows[i].motherFarm;
+    let j = i;
+    const sub = { 전입두수:0, 폐사두수:0, 현재고:0 };
+    const motherStartRow = r;
+    while(j < rows.length && rows[j].motherFarm === mf){
+      const row = rows[j];
+      no++;
+      sub.전입두수 += row.전입두수; sub.폐사두수 += row.폐사두수; sub.현재고 += row.현재고;
+      const alt = no % 2 === 0;
+      const baseFill = { fgColor:{rgb: alt?REPORT_XLSX_COLORS.altRow:'FFFFFF'} };
+      const grText = row.육성률===null ? '-' : Number(row.육성률.toFixed(1));
+      const cells = [
+        no, mf, row.bucket, row.farm, row.pen, row.전입일, row.전입두수, row.전입일령,
+        row.전입체중===null?'-':row.전입체중, row.전입시상태||'-', row.질병사항||'-', row.조치사항||'-',
+        row.폐사두수, row.현재고, grText,
+      ];
+      const noteCols = new Set([9,10,11]);
+      cells.forEach((v,c)=>{
+        const isNote = noteCols.has(c);
+        const fill = (c===8 && row.lowWeight) ? LOW_WEIGHT_FILL : baseFill;
+        put(r, c, v, {
+          font:{sz:10, color:{rgb:'333333'}},
+          fill, border: reportXlsxBorder(),
+          alignment:{vertical:'top', horizontal: isNote?'left':'center', indent:isNote?1:0, wrapText:isNote},
+        });
+      });
+      r++;
+      j++;
+    }
+    if(j - i > 1) merges.push({s:{r:motherStartRow,c:1}, e:{r:r-1,c:1}});
+    const subGr = sub.전입두수 ? Number((sub.현재고/sub.전입두수*100).toFixed(1)) : 0;
+    put(r, 0, `${mf} 소계`, { font:{bold:true, sz:10.5, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder(), alignment:{vertical:'center', horizontal:'center'} });
+    merges.push({s:{r,c:0}, e:{r,c:5}});
+    for(let c=1;c<=5;c++) put(r,c,'',{fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder()});
+    put(r, 6, sub.전입두수, { font:{bold:true, sz:10.5, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder(), alignment:{horizontal:'center'} });
+    for(let c=7;c<=11;c++) put(r,c,'',{fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder()});
+    put(r, 12, sub.폐사두수, { font:{bold:true, sz:10.5, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder(), alignment:{horizontal:'center'} });
+    put(r, 13, sub.현재고, { font:{bold:true, sz:10.5, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder(), alignment:{horizontal:'center'} });
+    put(r, 14, subGr, { font:{bold:true, sz:10.5, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.section}}, border: reportXlsxBorder(), alignment:{horizontal:'center'} });
+    r++;
+    grand.전입두수 += sub.전입두수; grand.폐사두수 += sub.폐사두수; grand.현재고 += sub.현재고;
+    i = j;
+  }
+
+  const grandGr = grand.전입두수 ? Number((grand.현재고/grand.전입두수*100).toFixed(1)) : 0;
+  put(r, 0, '전체 합계 / 가중평균', { font:{bold:true, sz:11, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.title}}, border: reportXlsxBorder(), alignment:{horizontal:'center'} });
+  merges.push({s:{r,c:0}, e:{r,c:5}});
+  for(let c=1;c<=5;c++) put(r,c,'',{fill:{fgColor:{rgb:REPORT_XLSX_COLORS.title}}, border: reportXlsxBorder()});
+  put(r, 6, grand.전입두수, { font:{bold:true, sz:11, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.title}}, border: reportXlsxBorder(), alignment:{horizontal:'center'} });
+  for(let c=7;c<=11;c++) put(r,c,'',{fill:{fgColor:{rgb:REPORT_XLSX_COLORS.title}}, border: reportXlsxBorder()});
+  put(r, 12, grand.폐사두수, { font:{bold:true, sz:11, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.title}}, border: reportXlsxBorder(), alignment:{horizontal:'center'} });
+  put(r, 13, grand.현재고, { font:{bold:true, sz:11, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.title}}, border: reportXlsxBorder(), alignment:{horizontal:'center'} });
+  put(r, 14, grandGr, { font:{bold:true, sz:11, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.title}}, border: reportXlsxBorder(), alignment:{horizontal:'center'} });
+  r++;
+
+  ws['!ref'] = XS.utils.encode_range({s:{r:0,c:0}, e:{r:r, c:NCOLS-1}});
+  ws['!merges'] = merges;
+  ws['!cols'] = [{wch:5},{wch:12},{wch:10},{wch:14},{wch:8},{wch:12},{wch:9},{wch:9},{wch:11},{wch:22},{wch:22},{wch:30},{wch:9},{wch:9},{wch:9}];
+  return ws;
+}
+
+async function exportPigletIntakeReportExcel(evt){
+  const btn = evt && evt.target;
+  const origText = btn ? btn.textContent : '';
+  if(btn){ btn.textContent = '엑셀 생성 중...'; btn.disabled = true; }
+  try{
+    const { start, end } = pigletMortalityIntakeWindow();
+    const rows = computePigletIntakeReportRows();
+    const XS = await loadXlsxStyleLib();
+    const wb = XS.utils.book_new();
+    const ws = buildPigletIntakeReportWorkbook(XS, `${start} ~ ${end}`, rows);
+    XS.utils.book_append_sheet(wb, ws, '자돈전입관리');
+    XS.writeFile(wb, `4팀_자돈전입관리보고서_${end}.xlsx`);
+  }catch(e){
+    alert('엑셀 생성 실패: ' + e.message);
+  }finally{
+    if(btn){ btn.textContent = origText; btn.disabled = false; }
+  }
 }
 
 function onPigletSourceSelectChange(selectId, customId){
@@ -8503,6 +8806,7 @@ function renderMortalityTable(){
 function renderRearingAll(){
   renderRearingKPI();
   renderPigletFarmMortalityBox('rearing-piglet-mortality-box');
+  renderPigletIntakeReportBox();
   renderBiyukFarmStatusBox();
   renderMonthlyIntakeBox();
   renderRearingAlertSummary();
