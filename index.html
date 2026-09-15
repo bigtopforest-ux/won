@@ -754,7 +754,7 @@
   <div id="rearing-piglet-mortality-box"></div>
 
   <div class="section-title">비육농장 현황</div>
-  <p style="font-size:12px;color:var(--muted);margin:2px 0 6px;">사육중인 비육농장을 농장별로 모아서 보여줍니다. 농장명을 클릭하면 배치(그룹)별 상세가 펼쳐집니다.</p>
+  <p style="font-size:12px;color:var(--muted);margin:2px 0 6px;">사육중인 농장을 비육/자돈 구분과 함께 농장별로 모아서 보여줍니다. 농장(행)을 클릭하면 배치(그룹)별 상세가 펼쳐집니다.</p>
   <div id="biyuk-farm-status-box"></div>
 
   <div style="display:flex;align-items:center;gap:10px;margin:18px 0 8px;">
@@ -6154,7 +6154,7 @@ function renderPigletFarmMortalityBox(containerId){
 const biyukFarmStatusExpanded = new Set(); // 배치별 상세를 펼친 농장명 목록
 
 function computeBiyukFarmStatusRows(){
-  const groups = REARING_GROUPS.filter(g=>g.상태==='사육중' && (g.돼지구분||'').trim()!=='자돈');
+  const groups = REARING_GROUPS.filter(g=>g.상태==='사육중');
   const byFarm = {};
   groups.forEach(g=>{
     const farm = (g.농장명||'').trim() || '(농장명 없음)';
@@ -6162,13 +6162,16 @@ function computeBiyukFarmStatusRows(){
   });
   return Object.keys(byFarm).map(farm=>{
     const farmGroups = byFarm[farm];
+    // 한 농장의 그룹이 전부 자돈이면 자돈농장, 하나라도 자돈이 아니면 비육농장으로 분류
+    // (실제 데이터에서는 "창신(비육)"/"창신(자돈)"처럼 농장명 자체가 나뉘어 있어 섞이는 경우는 없음)
+    const 구분 = farmGroups.every(g=>(g.돼지구분||'').trim()==='자돈') ? '자돈' : '비육';
     const 전입두수 = farmGroups.reduce((s,g)=>s+(Number(g.전입두수)||0),0);
     const 폐사두수 = farmGroups.reduce((s,g)=>s+(Number(g.폐사두수)||0),0);
     const 판매두수 = farmGroups.reduce((s,g)=>s+(Number(g.판매두수)||0),0);
     const 현재고 = farmGroups.reduce((s,g)=>s+(Number(g.현재고)||0),0);
     const 육성율 = 전입두수 ? ((현재고+판매두수)/전입두수*100) : 0;
-    return { farm, groups: farmGroups, 전입두수, 폐사두수, 판매두수, 현재고, 육성율 };
-  }).sort((a,b)=>a.farm.localeCompare(b.farm,'ko'));
+    return { farm, 구분, groups: farmGroups, 전입두수, 폐사두수, 판매두수, 현재고, 육성율 };
+  }).sort((a,b)=> a.구분!==b.구분 ? (a.구분==='비육'?-1:1) : a.farm.localeCompare(b.farm,'ko'));
 }
 
 function toggleBiyukFarmStatus(farm){
@@ -6190,21 +6193,29 @@ function renderBiyukFarmStatusBox(){
   if(!box) return;
   const rows = computeBiyukFarmStatusRows();
   if(!rows.length){
-    box.innerHTML = `<p style="color:var(--muted);font-size:13px;padding:10px 0;">사육중인 비육농장 데이터가 없습니다.</p>`;
+    box.innerHTML = `<p style="color:var(--muted);font-size:13px;padding:10px 0;">사육중인 농장 데이터가 없습니다.</p>`;
     return;
   }
-  const totalIn = rows.reduce((s,r)=>s+r.전입두수,0);
-  const totalDead = rows.reduce((s,r)=>s+r.폐사두수,0);
-  const totalSold = rows.reduce((s,r)=>s+r.판매두수,0);
-  const totalStock = rows.reduce((s,r)=>s+r.현재고,0);
-  const totalRate = totalIn ? ((totalStock+totalSold)/totalIn*100) : 0;
+  function sumRows(list){
+    const 전입두수 = list.reduce((s,r)=>s+r.전입두수,0);
+    const 폐사두수 = list.reduce((s,r)=>s+r.폐사두수,0);
+    const 판매두수 = list.reduce((s,r)=>s+r.판매두수,0);
+    const 현재고 = list.reduce((s,r)=>s+r.현재고,0);
+    const 육성율 = 전입두수 ? ((현재고+판매두수)/전입두수*100) : 0;
+    return { 전입두수, 폐사두수, 판매두수, 현재고, 육성율 };
+  }
+  const biyukRows = rows.filter(r=>r.구분==='비육');
+  const jadonRows = rows.filter(r=>r.구분==='자돈');
+  const totalBiyuk = sumRows(biyukRows);
+  const totalJadon = sumRows(jadonRows);
+  const totalAll = sumRows(rows);
 
   const bodyRows = rows.map(r=>{
     const expanded = biyukFarmStatusExpanded.has(r.farm);
     const safeFarm = r.farm.replace(/'/g,"\\'");
     const detailRow = !expanded ? '' : `
       <tr>
-        <td colspan="7" style="padding:10px 10px 12px 20px;background:var(--bg);">
+        <td colspan="8" style="padding:10px 10px 12px 20px;background:var(--bg);">
           <div class="table-wrap" style="margin:0;"><table style="border:1px solid var(--border);">
             <thead><tr><th>그룹명</th><th>전입일</th><th style="text-align:right;">전입두수</th><th style="text-align:right;">폐사두수</th><th style="text-align:right;">출하두수</th><th style="text-align:right;">육성율</th><th style="text-align:right;">현재고</th></tr></thead>
             <tbody>
@@ -6226,6 +6237,7 @@ function renderBiyukFarmStatusBox(){
       </tr>`;
     return `
       <tr onclick="toggleBiyukFarmStatus('${safeFarm}')" style="cursor:pointer;">
+        <td>${r.구분==='자돈'?'<span style="color:var(--info);font-weight:700;">자돈</span>':'<span style="color:var(--accent);font-weight:700;">비육</span>'}</td>
         <td style="font-weight:700;color:var(--ink);">${escapeHtml(r.farm)}</td>
         <td>${escapeHtml(FARM_MANAGERS[r.farm]||'-')}</td>
         <td style="text-align:right;">${r.전입두수.toLocaleString('ko-KR')}두</td>
@@ -6236,22 +6248,27 @@ function renderBiyukFarmStatusBox(){
       </tr>${detailRow}`;
   }).join('');
 
+  const totalRowHtml = (label, t)=> `
+        <tr class="total-row">
+          <td colspan="2">${label}</td>
+          <td>-</td>
+          <td style="text-align:right;">${t.전입두수.toLocaleString('ko-KR')}두</td>
+          <td style="text-align:right;">${t.폐사두수.toLocaleString('ko-KR')}두</td>
+          <td style="text-align:right;">${t.판매두수.toLocaleString('ko-KR')}두</td>
+          <td style="text-align:right;">${t.육성율.toFixed(1)}%</td>
+          <td style="text-align:right;">${t.현재고.toLocaleString('ko-KR')}두</td>
+        </tr>`;
+
   box.innerHTML = `
     <table>
       <thead><tr>
-        <th style="text-align:left;">농장명</th><th style="text-align:left;">담당자</th><th style="text-align:right;">전입두수</th><th style="text-align:right;">폐사두수</th><th style="text-align:right;">출하두수</th><th style="text-align:right;">육성율</th><th style="text-align:right;">현재고</th>
+        <th style="text-align:left;">구분</th><th style="text-align:left;">농장명</th><th style="text-align:left;">담당자</th><th style="text-align:right;">전입두수</th><th style="text-align:right;">폐사두수</th><th style="text-align:right;">출하두수</th><th style="text-align:right;">육성율</th><th style="text-align:right;">현재고</th>
       </tr></thead>
       <tbody>
         ${bodyRows}
-        <tr class="total-row">
-          <td>합계</td>
-          <td>-</td>
-          <td style="text-align:right;">${totalIn.toLocaleString('ko-KR')}두</td>
-          <td style="text-align:right;">${totalDead.toLocaleString('ko-KR')}두</td>
-          <td style="text-align:right;">${totalSold.toLocaleString('ko-KR')}두</td>
-          <td style="text-align:right;">${totalRate.toFixed(1)}%</td>
-          <td style="text-align:right;">${totalStock.toLocaleString('ko-KR')}두</td>
-        </tr>
+        ${biyukRows.length ? totalRowHtml('비육 합계', totalBiyuk) : ''}
+        ${jadonRows.length ? totalRowHtml('자돈 합계', totalJadon) : ''}
+        ${totalRowHtml('전체 합계', totalAll)}
       </tbody>
     </table>`;
 }
