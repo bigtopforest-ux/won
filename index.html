@@ -251,7 +251,6 @@
   <button class="view-nav-btn active" data-view="report">종합 보고</button>
   <button class="view-nav-btn" data-view="rearing">사육현황 관리</button>
   <button class="view-nav-btn" data-view="shipments">출하 실적</button>
-  <button class="view-nav-btn" data-view="shiprisk">출하 관리</button>
   <button class="view-nav-btn" data-view="medicine">약품비 관리</button>
   <button class="view-nav-btn" data-view="farms">신규 거래처</button>
   <button class="view-nav-btn" data-view="etc">기타 관리</button>
@@ -686,57 +685,6 @@
   <p class="count-tag" id="shipment-result-count"></p>
 </div>
 
-<div id="view-shiprisk" class="view">
-  <div class="section-title">출하가 안 나가는 농장</div>
-  <p style="font-size:12px;color:var(--muted);margin:2px 0 4px;">사육현황관리 탭에 올린 사육그룹내역을 그대로 사용합니다 — 엑셀 업로드는 사육현황관리 탭에서 해주세요.</p>
-  <p style="font-size:12px;color:var(--muted);margin:2px 0 10px;" id="shiprisk-sub">출하 목표일(일령)을 넘겼는데 아직 재고로 남아있는 농장을 모아서 매일 점검할 수 있게 정리했어요. 점검완료 체크는 화면을 새로고침하면 초기화됩니다.</p>
-
-  <div class="delay-toolbar">
-    <div class="delay-toolbar-group">
-      <span style="font-size:13px;color:var(--muted);font-weight:600;">출하 목표</span>
-      <div class="target-toggle" id="shipRiskTargetToggle">
-        <button type="button" data-val="140" onclick="setShipRiskTarget(140)">140</button>
-        <button type="button" data-val="145" onclick="setShipRiskTarget(145)">145</button>
-        <button type="button" data-val="150" onclick="setShipRiskTarget(150)">150</button>
-        <button type="button" data-val="155" onclick="setShipRiskTarget(155)">155</button>
-        <button type="button" data-val="160" onclick="setShipRiskTarget(160)">160</button>
-        <button type="button" data-val="165" onclick="setShipRiskTarget(165)">165</button>
-        <button type="button" data-val="170" onclick="setShipRiskTarget(170)">170</button>
-        <button type="button" data-val="175" onclick="setShipRiskTarget(175)">175</button>
-        <button type="button" data-val="180" class="active" onclick="setShipRiskTarget(180)">180</button>
-        <button type="button" data-val="185" onclick="setShipRiskTarget(185)">185</button>
-        <button type="button" data-val="190" onclick="setShipRiskTarget(190)">190</button>
-        <button type="button" data-val="195" onclick="setShipRiskTarget(195)">195</button>
-        <button type="button" data-val="200" onclick="setShipRiskTarget(200)">200</button>
-      </div>
-      <span style="font-size:13px;color:var(--muted);">일</span>
-    </div>
-    <div class="delay-toolbar-group">
-      <label style="font-size:13px;color:var(--muted);">기준일</label>
-      <input type="date" id="shipRiskRefDate" onchange="onShipRiskRefDateChange()">
-    </div>
-    <div class="delay-toolbar-group">
-      <select id="shipRiskSortField" onchange="renderShipmentReadyFarms()">
-        <option value="정체율">정체율순</option>
-        <option value="최고일령">최고일령순</option>
-        <option value="출하대상">출하대상두수순</option>
-      </select>
-      <button class="tab-btn" id="shipRiskSortDirBtn" onclick="toggleShipRiskSortDir()">내림차순 ▼</button>
-    </div>
-  </div>
-  <div class="controls">
-    <div class="target-toggle" id="shipRiskViewModeToggle">
-      <button type="button" data-mode="farm" class="active" onclick="setShipRiskViewMode('farm')">농장별</button>
-      <button type="button" data-mode="batch" onclick="setShipRiskViewMode('batch')">일령별(배치별)</button>
-    </div>
-    <button class="tab-btn" id="shipRiskUncheckedBtn" onclick="toggleShipRiskUncheckedOnly()">미점검만</button>
-    <button class="tab-btn" id="shipRiskExpandAllBtn" onclick="toggleShipRiskExpandAll()">모두 펼치기</button>
-  </div>
-
-  <div id="shiprisk-cards-box"></div>
-  <div id="shiprisk-batch-list-box" style="display:none;"></div>
-  <p class="count-tag" id="shiprisk-result-count"></p>
-</div>
 
 <div id="view-rearing" class="view">
 
@@ -823,11 +771,17 @@
     <div class="delay-toolbar-group">
       <span style="font-size:13px;color:var(--muted);font-weight:600;">출하 목표</span>
       <div class="target-toggle" id="biyukTargetToggle">
+        <button type="button" data-val="150" onclick="setBiyukTarget(150)">150</button>
+        <button type="button" data-val="155" onclick="setBiyukTarget(155)">155</button>
+        <button type="button" data-val="160" onclick="setBiyukTarget(160)">160</button>
+        <button type="button" data-val="165" onclick="setBiyukTarget(165)">165</button>
         <button type="button" data-val="170" class="active" onclick="setBiyukTarget(170)">170</button>
         <button type="button" data-val="175" onclick="setBiyukTarget(175)">175</button>
         <button type="button" data-val="180" onclick="setBiyukTarget(180)">180</button>
         <button type="button" data-val="185" onclick="setBiyukTarget(185)">185</button>
         <button type="button" data-val="190" onclick="setBiyukTarget(190)">190</button>
+        <button type="button" data-val="195" onclick="setBiyukTarget(195)">195</button>
+        <button type="button" data-val="200" onclick="setBiyukTarget(200)">200</button>
       </div>
       <span style="font-size:13px;color:var(--muted);">일</span>
     </div>
@@ -849,8 +803,16 @@
       <button class="tab-btn" id="biyukSortDirBtn" onclick="toggleBiyukSortDir()">오름차순 ▲</button>
     </div>
   </div>
+  <div class="controls">
+    <div class="target-toggle" id="biyukViewModeToggle">
+      <button type="button" data-mode="farm" class="active" onclick="setBiyukViewMode('farm')">농장별</button>
+      <button type="button" data-mode="batch" onclick="setBiyukViewMode('batch')">일령별(배치별)</button>
+    </div>
+    <button class="tab-btn" id="biyukUncheckedBtn" onclick="toggleBiyukOnlyUnchecked()">미점검만</button>
+  </div>
   <div id="rearing-groups-cards-head"></div>
   <div id="rearing-groups-cards-box"></div>
+  <div id="rearing-groups-batch-list-box" style="display:none;"></div>
   <p class="count-tag" id="rearing-groups-result-count"></p>
 
   <div class="section-title">폐사 이력</div>
@@ -6160,18 +6122,21 @@ function computeBiyukFarmStatusRows(){
     const farm = (g.농장명||'').trim() || '(농장명 없음)';
     (byFarm[farm] = byFarm[farm] || []).push(g);
   });
+  const 구분순서 = {비육:0, 혼합:1, 자돈:2};
   return Object.keys(byFarm).map(farm=>{
     const farmGroups = byFarm[farm];
-    // 한 농장의 그룹이 전부 자돈이면 자돈농장, 하나라도 자돈이 아니면 비육농장으로 분류
-    // (실제 데이터에서는 "창신(비육)"/"창신(자돈)"처럼 농장명 자체가 나뉘어 있어 섞이는 경우는 없음)
-    const 구분 = farmGroups.every(g=>(g.돼지구분||'').trim()==='자돈') ? '자돈' : '비육';
+    // 대부분은 "창신(비육)"/"창신(자돈)"처럼 농장명 자체가 나뉘어 있어 한 농장에 한 구분만 있지만,
+    // 드물게 한 농장 안에 비육·자돈 그룹이 섞여 있는 경우(예: 혜정(권종한))도 있어 "혼합"으로 따로 표시한다.
+    const hasJadon = farmGroups.some(g=>(g.돼지구분||'').trim()==='자돈');
+    const hasBiyuk = farmGroups.some(g=>(g.돼지구분||'').trim()!=='자돈');
+    const 구분 = hasJadon && hasBiyuk ? '혼합' : (hasJadon ? '자돈' : '비육');
     const 전입두수 = farmGroups.reduce((s,g)=>s+(Number(g.전입두수)||0),0);
     const 폐사두수 = farmGroups.reduce((s,g)=>s+(Number(g.폐사두수)||0),0);
     const 판매두수 = farmGroups.reduce((s,g)=>s+(Number(g.판매두수)||0),0);
     const 현재고 = farmGroups.reduce((s,g)=>s+(Number(g.현재고)||0),0);
     const 육성율 = 전입두수 ? ((현재고+판매두수)/전입두수*100) : 0;
     return { farm, 구분, groups: farmGroups, 전입두수, 폐사두수, 판매두수, 현재고, 육성율 };
-  }).sort((a,b)=> a.구분!==b.구분 ? (a.구분==='비육'?-1:1) : a.farm.localeCompare(b.farm,'ko'));
+  }).sort((a,b)=> 구분순서[a.구분]!==구분순서[b.구분] ? 구분순서[a.구분]-구분순서[b.구분] : a.farm.localeCompare(b.farm,'ko'));
 }
 
 function toggleBiyukFarmStatus(farm){
@@ -6196,32 +6161,38 @@ function renderBiyukFarmStatusBox(){
     box.innerHTML = `<p style="color:var(--muted);font-size:13px;padding:10px 0;">사육중인 농장 데이터가 없습니다.</p>`;
     return;
   }
-  function sumRows(list){
-    const 전입두수 = list.reduce((s,r)=>s+r.전입두수,0);
-    const 폐사두수 = list.reduce((s,r)=>s+r.폐사두수,0);
-    const 판매두수 = list.reduce((s,r)=>s+r.판매두수,0);
-    const 현재고 = list.reduce((s,r)=>s+r.현재고,0);
+  function sumGroups(list){
+    const 전입두수 = list.reduce((s,g)=>s+(Number(g.전입두수)||0),0);
+    const 폐사두수 = list.reduce((s,g)=>s+(Number(g.폐사두수)||0),0);
+    const 판매두수 = list.reduce((s,g)=>s+(Number(g.판매두수)||0),0);
+    const 현재고 = list.reduce((s,g)=>s+(Number(g.현재고)||0),0);
     const 육성율 = 전입두수 ? ((현재고+판매두수)/전입두수*100) : 0;
     return { 전입두수, 폐사두수, 판매두수, 현재고, 육성율 };
   }
-  const biyukRows = rows.filter(r=>r.구분==='비육');
-  const jadonRows = rows.filter(r=>r.구분==='자돈');
-  const totalBiyuk = sumRows(biyukRows);
-  const totalJadon = sumRows(jadonRows);
-  const totalAll = sumRows(rows);
+  // 합계는 농장 단위 "구분"이 아니라 그룹(배치) 단위 돼지구분으로 계산한다. 혜정(권종한)처럼
+  // 한 농장 안에 비육·자돈 그룹이 섞여 있어도(=농장행은 "혼합") 합계는 항상 정확하게 맞도록 하기 위함.
+  const allGroups = rows.flatMap(r=>r.groups);
+  const biyukGroups = allGroups.filter(g=>(g.돼지구분||'').trim()!=='자돈');
+  const jadonGroups = allGroups.filter(g=>(g.돼지구분||'').trim()==='자돈');
+  const totalBiyuk = sumGroups(biyukGroups);
+  const totalJadon = sumGroups(jadonGroups);
+  const totalAll = sumGroups(allGroups);
 
   const bodyRows = rows.map(r=>{
     const expanded = biyukFarmStatusExpanded.has(r.farm);
     const safeFarm = r.farm.replace(/'/g,"\\'");
+    const isMixed = r.구분==='혼합';
     const detailRow = !expanded ? '' : `
       <tr>
         <td colspan="8" style="padding:10px 10px 12px 20px;background:var(--bg);">
           <div class="table-wrap" style="margin:0;"><table style="border:1px solid var(--border);">
-            <thead><tr><th>그룹명</th><th>전입일</th><th style="text-align:right;">전입두수</th><th style="text-align:right;">폐사두수</th><th style="text-align:right;">출하두수</th><th style="text-align:right;">육성율</th><th style="text-align:right;">현재고</th></tr></thead>
+            <thead><tr>${isMixed?'<th>구분</th>':''}<th>그룹명</th><th>전입일</th><th style="text-align:right;">전입두수</th><th style="text-align:right;">폐사두수</th><th style="text-align:right;">출하두수</th><th style="text-align:right;">육성율</th><th style="text-align:right;">현재고</th></tr></thead>
             <tbody>
               ${r.groups.slice().sort((a,b)=>(a.전입일||'').localeCompare(b.전입일||'')).map(g=>{
                 const gr = getRearingSurvivalRate(g);
+                const isJadonGroup = (g.돼지구분||'').trim()==='자돈';
                 return `<tr>
+                  ${isMixed?`<td>${isJadonGroup?'<span style="color:var(--info);font-weight:700;">자돈</span>':'<span style="color:var(--accent);font-weight:700;">비육</span>'}</td>`:''}
                   <td>${g.그룹명||'-'}</td>
                   <td style="color:var(--muted);">${g.전입일||'-'}</td>
                   <td style="text-align:right;">${(Number(g.전입두수)||0).toLocaleString('ko-KR')}두</td>
@@ -6237,7 +6208,7 @@ function renderBiyukFarmStatusBox(){
       </tr>`;
     return `
       <tr onclick="toggleBiyukFarmStatus('${safeFarm}')" style="cursor:pointer;">
-        <td>${r.구분==='자돈'?'<span style="color:var(--info);font-weight:700;">자돈</span>':'<span style="color:var(--accent);font-weight:700;">비육</span>'}</td>
+        <td>${r.구분==='자돈' ? '<span style="color:var(--info);font-weight:700;">자돈</span>' : (r.구분==='혼합' ? '<span style="color:var(--warn);font-weight:700;">혼합</span>' : '<span style="color:var(--accent);font-weight:700;">비육</span>')}</td>
         <td style="font-weight:700;color:var(--ink);">${escapeHtml(r.farm)}</td>
         <td>${escapeHtml(FARM_MANAGERS[r.farm]||'-')}</td>
         <td style="text-align:right;">${r.전입두수.toLocaleString('ko-KR')}두</td>
@@ -6266,8 +6237,8 @@ function renderBiyukFarmStatusBox(){
       </tr></thead>
       <tbody>
         ${bodyRows}
-        ${biyukRows.length ? totalRowHtml('비육 합계', totalBiyuk) : ''}
-        ${jadonRows.length ? totalRowHtml('자돈 합계', totalJadon) : ''}
+        ${biyukGroups.length ? totalRowHtml('비육 합계', totalBiyuk) : ''}
+        ${jadonGroups.length ? totalRowHtml('자돈 합계', totalJadon) : ''}
         ${totalRowHtml('전체 합계', totalAll)}
       </tbody>
     </table>`;
@@ -7695,7 +7666,7 @@ function toggleFarmManagerGroup(prefix, mgr){
   else if(prefix==='piglet') renderRearingPigletTable();
 }
 
-function renderFarmDelayCards(containerId, countTagId, headId, groups, targetDay, refDate, expandedSet, prefix, sortField, sortDir, showSettlement, showFocus, groupByManager){
+function renderFarmDelayCards(containerId, countTagId, headId, groups, targetDay, refDate, expandedSet, prefix, sortField, sortDir, showSettlement, showFocus, groupByManager, checkedSet, toggleCheckedFn){
   const box = document.getElementById(containerId);
   if(!box) return;
   const { summaries, active } = computeFarmDelaySummaries(groups, targetDay, refDate);
@@ -7789,6 +7760,7 @@ function renderFarmDelayCards(containerId, countTagId, headId, groups, targetDay
         <div class="farm-card-stat"><b>${sm.최고}/${sm.평균}일</b><span class="stat-label">최고/평균</span></div>
         <div class="farm-card-stat"><b>${sm.육성률가중.toFixed(1)}%</b><span class="stat-label">육성률</span></div>
         <div class="farm-card-stat"><b style="font-size:13px;">${sm.최근확인}</b><span class="stat-label">최근 재고확인</span></div>
+        ${checkedSet ? `<div onclick="event.stopPropagation()"><label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap;"><input type="checkbox" ${checkedSet.has(farm)?'checked':''} onchange="${toggleCheckedFn}('${safeFarm}')"> 점검완료</label></div>` : ''}
         <span class="severity-chip ${sm.severity}">${sm.severityLabel}</span>
         <span class="farm-card-chevron">▾</span>
       </div>
@@ -7861,40 +7833,55 @@ function renderFarmDelayCards(containerId, countTagId, headId, groups, targetDay
   }).join('');
 }
 
-// ==================== 출하 관리 (출하가 안 나가는 농장 · 매일 점검) ====================
-// 사육현황관리의 지연 판정 로직(computeFarmDelaySummaries)을 그대로 재사용해서, 실제로 출하 목표일을
-// 넘겼는데 아직 재고가 남아있는 농장만 모아서 별도 탭으로 보여준다. "점검완료" 체크는 매일 새로 확인하는
-// 성격이라 서버에 저장하지 않고 세션(새로고침 전까지)에만 유지한다.
-let shipRiskTargetDay = 180;
-let shipRiskRefDate = null;
-let shipRiskExpandedFarms = new Set();
-let shipRiskSortField = '정체율';
-let shipRiskSortDir = 'desc';
-let shipRiskChecked = new Set();
-let shipRiskOnlyUnchecked = false;
-let shipRiskViewMode = 'farm'; // 'farm' = 농장별 카드, 'batch' = 일령(배치)별 평면 목록
+let biyukTargetDay = 170;
+let biyukRefDate = null;
+let biyukExpandedFarms = new Set();
+let biyukSortField = '농장명';
+let biyukSortDir = 'asc';
+// "점검완료" 체크는 매일 새로 확인하는 성격이라 서버에 저장하지 않고 세션(새로고침 전까지)에만 유지한다.
+let biyukChecked = new Set();
+let biyukOnlyUnchecked = false;
+let biyukViewMode = 'farm'; // 'farm' = 담당자·농장별 카드, 'batch' = 일령(배치)별 평면 목록
 
-function setShipRiskViewMode(mode){
-  shipRiskViewMode = mode;
-  document.querySelectorAll('#shipRiskViewModeToggle button').forEach(b=> b.classList.toggle('active', b.dataset.mode===mode));
-  const expandAllBtn = document.getElementById('shipRiskExpandAllBtn');
-  if(expandAllBtn) expandAllBtn.style.display = mode==='farm' ? '' : 'none';
-  document.getElementById('shiprisk-cards-box').style.display = mode==='farm' ? '' : 'none';
-  document.getElementById('shiprisk-batch-list-box').style.display = mode==='batch' ? '' : 'none';
-  renderShipmentReadyFarms();
+function setBiyukViewMode(mode){
+  biyukViewMode = mode;
+  document.querySelectorAll('#biyukViewModeToggle button').forEach(b=> b.classList.toggle('active', b.dataset.mode===mode));
+  const batchEl = document.getElementById('rearing-groups-batch-list-box');
+  if(batchEl) batchEl.style.display = mode==='batch' ? '' : 'none';
+  if(mode==='batch'){
+    const cardsEl = document.getElementById('rearing-groups-cards-box');
+    const headEl = document.getElementById('rearing-groups-cards-head');
+    if(cardsEl) cardsEl.style.display = 'none';
+    if(headEl) headEl.style.display = 'none';
+  }
+  renderRearingGroupsTable();
 }
 
-// 농장별 카드에서는 정체율이 낮은 농장의 오래된 배치가 목록 뒤쪽에 묻혀 안 보일 수 있어서,
-// 배치(그룹) 하나하나를 일령이 오래된 순으로 바로 나열해서 확인할 수 있게 하는 평면 목록.
-function renderShipRiskBatchList(refDate){
-  const box = document.getElementById('shiprisk-batch-list-box');
+function toggleBiyukChecked(farm){
+  if(biyukChecked.has(farm)) biyukChecked.delete(farm); else biyukChecked.add(farm);
+  renderRearingGroupsTable();
+}
+
+function toggleBiyukOnlyUnchecked(){
+  biyukOnlyUnchecked = !biyukOnlyUnchecked;
+  const btn = document.getElementById('biyukUncheckedBtn');
+  if(btn) btn.classList.toggle('active', biyukOnlyUnchecked);
+  renderRearingGroupsTable();
+}
+
+// 농장별 카드는 담당자별로 묶이다 보니, 정체율 낮은 농장에 속한 오래된 배치가 목록 뒤쪽에 묻혀 안 보일
+// 수 있다. 목표일령을 넘긴 배치를 농장 구분 없이 일령이 오래된 순으로 바로 나열해서 볼 수 있게 하는 평면 목록.
+function renderBiyukBatchList(groups, refDate){
+  const box = document.getElementById('rearing-groups-batch-list-box');
   if(!box) return;
-  const allBiyuk = REARING_GROUPS.filter(g=>(g.돼지구분||'').trim()!=='자돈');
-  const active = allBiyuk.filter(g=>g.상태==='사육중' || g.상태==='종료');
+  const active = groups.filter(g=>g.상태==='사육중' || g.상태==='종료');
   let delayed = active.map(g=>({ g, age: computeGroupAgeDays(g, refDate) }))
-    .filter(x=> x.age!==null && x.age>=shipRiskTargetDay && (Number(x.g.현재고)||0)>0);
-  if(shipRiskOnlyUnchecked) delayed = delayed.filter(x=>!shipRiskChecked.has(x.g.농장명||'(농장명 없음)'));
+    .filter(x=> x.age!==null && x.age>=biyukTargetDay && (Number(x.g.현재고)||0)>0);
+  if(biyukOnlyUnchecked) delayed = delayed.filter(x=>!biyukChecked.has(x.g.농장명||'(농장명 없음)'));
   delayed.sort((a,b)=> b.age - a.age);
+
+  const countTag = document.getElementById('rearing-groups-result-count');
+  if(countTag) countTag.textContent = `${delayed.length}개 배치`;
 
   if(!delayed.length){
     box.innerHTML = '<p class="upload-status">조건에 해당하는 배치가 없습니다 ✅</p>';
@@ -7904,7 +7891,7 @@ function renderShipRiskBatchList(refDate){
   const rows = delayed.map(({g,age})=>{
     const farm = g.농장명||'(농장명 없음)';
     const gr = getRearingSurvivalRate(g);
-    const over = age - shipRiskTargetDay;
+    const over = age - biyukTargetDay;
     const overStyle = over>=60?'color:var(--danger);':'';
     return `<tr>
       <td style="font-weight:700;color:var(--ink);">${escapeHtml(farm)}</td>
@@ -7927,165 +7914,6 @@ function renderShipRiskBatchList(refDate){
     <tbody>${rows}</tbody>
   </table></div>`;
 }
-
-function renderShipmentReadyFarms(){
-  if(!shipRiskRefDate) shipRiskRefDate = localDateStr(new Date());
-  const dateEl = document.getElementById('shipRiskRefDate');
-  if(dateEl && !dateEl.value) dateEl.value = shipRiskRefDate;
-  const sortFieldEl = document.getElementById('shipRiskSortField');
-  if(sortFieldEl) shipRiskSortField = sortFieldEl.value;
-
-  const allBiyuk = REARING_GROUPS.filter(g=>(g.돼지구분||'').trim()!=='자돈');
-  const { summaries } = computeFarmDelaySummaries(allBiyuk, shipRiskTargetDay, shipRiskRefDate);
-  let overFarms = summaries.filter(sm=>sm.지연개수>0);
-
-  const subEl = document.getElementById('shiprisk-sub');
-  if(subEl) subEl.innerHTML = `출하 목표(${shipRiskTargetDay}일)를 넘겼는데 아직 재고로 남은 <b>${overFarms.length}개</b> 농장`;
-
-  if(shipRiskOnlyUnchecked) overFarms = overFarms.filter(sm=>!shipRiskChecked.has(sm.farm));
-
-  overFarms = overFarms.slice().sort((a,b)=>{
-    let va, vb;
-    switch(shipRiskSortField){
-      case '최고일령': va=a.최고; vb=b.최고; break;
-      case '출하대상': va=a.두수합; vb=b.두수합; break;
-      default: va=a.정체율; vb=b.정체율; break; // '정체율'
-    }
-    const cmp = va - vb;
-    return shipRiskSortDir==='asc' ? cmp : -cmp;
-  });
-
-  const box = document.getElementById('shiprisk-cards-box');
-  const countTag = document.getElementById('shiprisk-result-count');
-  if(box) box.innerHTML = overFarms.length ? overFarms.map(sm=>shipRiskCardHtml(sm, shipRiskRefDate)).join('') : '<p class="upload-status">조건에 해당하는 농장이 없습니다 ✅</p>';
-
-  renderShipRiskBatchList(shipRiskRefDate);
-
-  if(countTag){
-    if(shipRiskViewMode==='batch'){
-      const batchCount = overFarms.reduce((s,sm)=>s+sm.지연개수,0);
-      countTag.textContent = `${batchCount}개 배치 (${overFarms.length}개 농장)`;
-    } else {
-      countTag.textContent = `${overFarms.length}개 농장`;
-    }
-  }
-}
-
-function shipRiskCardHtml(sm, refDate){
-  const { farm, farmGroups } = sm;
-  const expanded = shipRiskExpandedFarms.has(farm);
-  const isChecked = shipRiskChecked.has(farm);
-  const safeFarm = farm.replace(/'/g,"\\'");
-  const barCls = sm.정체율>=70?'danger':(sm.정체율>=30?'warn':'');
-  const subRows = farmGroups.slice()
-    .filter(g=>{ const age=computeGroupAgeDays(g, refDate); return age!==null && age>=shipRiskTargetDay && (Number(g.현재고)||0)>0; })
-    .sort((a,b)=>(b.전입일||'').localeCompare(a.전입일||''))
-    .map(g=>{
-      const age = computeGroupAgeDays(g, refDate);
-      const survivalText = (function(){ const r=getRearingSurvivalRate(g); return r===null?'-':r.toFixed(1)+'%'; })();
-      return `<tr>
-        <td>${g.그룹명||'-'}</td>
-        <td style="text-align:center;">${g.전입일||'-'}</td>
-        <td style="text-align:center;">${age===null?'-':age+'일'}</td>
-        <td style="text-align:center;">${(Number(g.전입두수)||0).toLocaleString('ko-KR')}</td>
-        <td style="text-align:center;">${(Number(g.현재고)||0).toLocaleString('ko-KR')}</td>
-        <td style="text-align:center;">${survivalText}</td>
-      </tr>`;
-    }).join('');
-
-  return `<div class="farm-card ${expanded?'expanded':''}" onclick="shipriskToggleFarmExpand('${safeFarm}')">
-    <div class="farm-card-top">
-      <div class="farm-card-name">${escapeHtml(farm)}</div>
-      <div class="farm-card-stat stat-danger"><b>${sm.두수합.toLocaleString('ko-KR')}두</b><span class="stat-label">출하대상</span></div>
-      <div class="farm-card-stat"><b>${sm.지연개수}개</b><span class="stat-label">지연 그룹</span></div>
-      <div class="farm-card-stat"><b>${sm.최고}/${sm.평균}일</b><span class="stat-label">최고/평균</span></div>
-      <div class="farm-card-stat"><b>${sm.육성률가중.toFixed(1)}%</b><span class="stat-label">육성률</span></div>
-      <div onclick="event.stopPropagation()"><label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap;"><input type="checkbox" ${isChecked?'checked':''} onchange="toggleShipRiskChecked('${safeFarm}')"> 점검완료</label></div>
-      <span class="severity-chip ${sm.severity}">${sm.severityLabel}</span>
-      <span class="farm-card-chevron">▾</span>
-    </div>
-    <div class="progress-track"><div class="progress-fill ${barCls}" style="width:${sm.정체율}%"></div></div>
-    <div class="progress-pct">정체율 ${sm.정체율}%</div>
-    ${expanded ? `<div class="farm-card-subtable" onclick="event.stopPropagation();"><div class="table-wrap"><table>
-      <thead><tr><th>그룹명</th><th>전입일</th><th>사육일령</th><th>전입두수</th><th>현재고</th><th>육성율</th></tr></thead>
-      <tbody>${subRows}</tbody>
-    </table></div></div>` : ''}
-  </div>`;
-}
-
-function shipriskToggleFarmExpand(farm){
-  if(shipRiskExpandedFarms.has(farm)) shipRiskExpandedFarms.delete(farm); else shipRiskExpandedFarms.add(farm);
-  renderShipmentReadyFarms();
-}
-
-function toggleShipRiskChecked(farm){
-  if(shipRiskChecked.has(farm)) shipRiskChecked.delete(farm); else shipRiskChecked.add(farm);
-  renderShipmentReadyFarms();
-}
-
-function setShipRiskTarget(v){
-  shipRiskTargetDay = v;
-  document.querySelectorAll('#shipRiskTargetToggle button').forEach(b=> b.classList.toggle('active', Number(b.dataset.val)===v));
-  renderShipmentReadyFarms();
-}
-
-function onShipRiskRefDateChange(){
-  const el = document.getElementById('shipRiskRefDate');
-  if(el) shipRiskRefDate = el.value;
-  renderShipmentReadyFarms();
-}
-
-function toggleShipRiskSortDir(){
-  const sel = document.getElementById('shipRiskSortField');
-  if(sel) shipRiskSortField = sel.value;
-  shipRiskSortDir = shipRiskSortDir==='asc' ? 'desc' : 'asc';
-  const btn = document.getElementById('shipRiskSortDirBtn');
-  if(btn) btn.textContent = shipRiskSortDir==='asc' ? '오름차순 ▲' : '내림차순 ▼';
-  renderShipmentReadyFarms();
-}
-
-function toggleShipRiskUncheckedOnly(){
-  shipRiskOnlyUnchecked = !shipRiskOnlyUnchecked;
-  const btn = document.getElementById('shipRiskUncheckedBtn');
-  if(btn) btn.classList.toggle('active', shipRiskOnlyUnchecked);
-  renderShipmentReadyFarms();
-}
-
-function toggleShipRiskExpandAll(){
-  const allOpen = shipRiskExpandedFarms.size > 0;
-  if(allOpen){
-    shipRiskExpandedFarms.clear();
-  } else {
-    const allBiyuk = REARING_GROUPS.filter(g=>(g.돼지구분||'').trim()!=='자돈');
-    const { summaries } = computeFarmDelaySummaries(allBiyuk, shipRiskTargetDay, shipRiskRefDate);
-    summaries.filter(sm=>sm.지연개수>0).forEach(sm=>shipRiskExpandedFarms.add(sm.farm));
-  }
-  const btn = document.getElementById('shipRiskExpandAllBtn');
-  if(btn) btn.textContent = allOpen ? '모두 펼치기' : '모두 접기';
-  renderShipmentReadyFarms();
-}
-
-document.querySelectorAll('.view-nav-btn').forEach(btn=>{
-  if(btn.dataset.view==='shiprisk'){
-    btn.addEventListener('click', ()=>{
-      if(!rearingLoaded){
-        loadRearingFromAPI().then(()=>{
-          rearingLoaded = true;
-          renderRearingAll();
-          renderShipmentReadyFarms();
-        });
-      } else {
-        renderShipmentReadyFarms();
-      }
-    });
-  }
-});
-
-let biyukTargetDay = 170;
-let biyukRefDate = null;
-let biyukExpandedFarms = new Set();
-let biyukSortField = '농장명';
-let biyukSortDir = 'asc';
 
 function setBiyukTarget(v){
   biyukTargetDay = v;
@@ -8124,15 +7952,20 @@ function renderRearingGroupsTable(){
   const sortFieldEl = document.getElementById('biyukSortField');
   if(sortFieldEl) biyukSortField = sortFieldEl.value;
 
-  const groups = REARING_GROUPS.filter(g=>{
+  let groups = REARING_GROUPS.filter(g=>{
     if((g.돼지구분||'').trim()==='자돈') return false; // 자돈사는 별도 "후기 자돈 사육 현황" 섹션에서 표시
     if(status && g.상태 !== status) return false;
     if(q && !((g.농장명||'').toLowerCase().includes(q) || (g.그룹명||'').toLowerCase().includes(q))) return false;
     return true;
   });
+  if(biyukOnlyUnchecked) groups = groups.filter(g=>!biyukChecked.has((g.농장명||'').trim()));
 
-  renderFarmDelayCards('rearing-groups-cards-box', 'rearing-groups-result-count', 'rearing-groups-cards-head', groups, biyukTargetDay, biyukRefDate, biyukExpandedFarms, 'biyuk', biyukSortField, biyukSortDir, true, true, true);
-  applyBiyukListCollapsedState();
+  if(biyukViewMode==='batch'){
+    renderBiyukBatchList(groups, biyukRefDate);
+  } else {
+    renderFarmDelayCards('rearing-groups-cards-box', 'rearing-groups-result-count', 'rearing-groups-cards-head', groups, biyukTargetDay, biyukRefDate, biyukExpandedFarms, 'biyuk', biyukSortField, biyukSortDir, true, true, true, biyukChecked, 'toggleBiyukChecked');
+    applyBiyukListCollapsedState();
+  }
   renderRearingSettlementBox();
 
   renderRearingPigletTable();
