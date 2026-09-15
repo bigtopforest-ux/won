@@ -249,7 +249,8 @@
 <div class="view-nav">
   <button class="view-nav-btn active" data-view="report">종합 보고</button>
   <button class="view-nav-btn" data-view="rearing">사육현황 관리</button>
-  <button class="view-nav-btn" data-view="shipments">출하 관리</button>
+  <button class="view-nav-btn" data-view="shipments">출하 실적</button>
+  <button class="view-nav-btn" data-view="shiprisk">출하 관리</button>
   <button class="view-nav-btn" data-view="medicine">약품비 관리</button>
   <button class="view-nav-btn" data-view="farms">신규 거래처</button>
   <button class="view-nav-btn" data-view="etc">기타 관리</button>
@@ -673,6 +674,44 @@
   <div id="shipment-cards-head"></div>
   <div id="shipment-cards-box"></div>
   <p class="count-tag" id="shipment-result-count"></p>
+</div>
+
+<div id="view-shiprisk" class="view">
+  <div class="section-title">출하가 안 나가는 농장</div>
+  <p style="font-size:12px;color:var(--muted);margin:2px 0 10px;" id="shiprisk-sub">출하 목표일(일령)을 넘겼는데 아직 재고로 남아있는 농장을 모아서 매일 점검할 수 있게 정리했어요. 점검완료 체크는 화면을 새로고침하면 초기화됩니다.</p>
+
+  <div class="delay-toolbar">
+    <div class="delay-toolbar-group">
+      <span style="font-size:13px;color:var(--muted);font-weight:600;">출하 목표</span>
+      <div class="target-toggle" id="shipRiskTargetToggle">
+        <button type="button" data-val="170" onclick="setShipRiskTarget(170)">170</button>
+        <button type="button" data-val="175" onclick="setShipRiskTarget(175)">175</button>
+        <button type="button" data-val="180" class="active" onclick="setShipRiskTarget(180)">180</button>
+        <button type="button" data-val="185" onclick="setShipRiskTarget(185)">185</button>
+        <button type="button" data-val="190" onclick="setShipRiskTarget(190)">190</button>
+      </div>
+      <span style="font-size:13px;color:var(--muted);">일</span>
+    </div>
+    <div class="delay-toolbar-group">
+      <label style="font-size:13px;color:var(--muted);">기준일</label>
+      <input type="date" id="shipRiskRefDate" onchange="onShipRiskRefDateChange()">
+    </div>
+    <div class="delay-toolbar-group">
+      <select id="shipRiskSortField" onchange="renderShipmentReadyFarms()">
+        <option value="정체율">정체율순</option>
+        <option value="최고일령">최고일령순</option>
+        <option value="출하대상">출하대상두수순</option>
+      </select>
+      <button class="tab-btn" id="shipRiskSortDirBtn" onclick="toggleShipRiskSortDir()">내림차순 ▼</button>
+    </div>
+  </div>
+  <div class="controls">
+    <button class="tab-btn" id="shipRiskUncheckedBtn" onclick="toggleShipRiskUncheckedOnly()">미점검만</button>
+    <button class="tab-btn" id="shipRiskExpandAllBtn" onclick="toggleShipRiskExpandAll()">모두 펼치기</button>
+  </div>
+
+  <div id="shiprisk-cards-box"></div>
+  <p class="count-tag" id="shiprisk-result-count"></p>
 </div>
 
 <div id="view-rearing" class="view">
@@ -7509,6 +7548,162 @@ function renderFarmDelayCards(containerId, countTagId, headId, groups, targetDay
     </div>`;
   }).join('');
 }
+
+// ==================== 출하 관리 (출하가 안 나가는 농장 · 매일 점검) ====================
+// 사육현황관리의 지연 판정 로직(computeFarmDelaySummaries)을 그대로 재사용해서, 실제로 출하 목표일을
+// 넘겼는데 아직 재고가 남아있는 농장만 모아서 별도 탭으로 보여준다. "점검완료" 체크는 매일 새로 확인하는
+// 성격이라 서버에 저장하지 않고 세션(새로고침 전까지)에만 유지한다.
+let shipRiskTargetDay = 180;
+let shipRiskRefDate = null;
+let shipRiskExpandedFarms = new Set();
+let shipRiskSortField = '정체율';
+let shipRiskSortDir = 'desc';
+let shipRiskChecked = new Set();
+let shipRiskOnlyUnchecked = false;
+
+function renderShipmentReadyFarms(){
+  if(!shipRiskRefDate) shipRiskRefDate = localDateStr(new Date());
+  const dateEl = document.getElementById('shipRiskRefDate');
+  if(dateEl && !dateEl.value) dateEl.value = shipRiskRefDate;
+  const sortFieldEl = document.getElementById('shipRiskSortField');
+  if(sortFieldEl) shipRiskSortField = sortFieldEl.value;
+
+  const allBiyuk = REARING_GROUPS.filter(g=>(g.돼지구분||'').trim()!=='자돈');
+  const { summaries } = computeFarmDelaySummaries(allBiyuk, shipRiskTargetDay, shipRiskRefDate);
+  let overFarms = summaries.filter(sm=>sm.지연개수>0);
+
+  const subEl = document.getElementById('shiprisk-sub');
+  if(subEl) subEl.innerHTML = `출하 목표(${shipRiskTargetDay}일)를 넘겼는데 아직 재고로 남은 <b>${overFarms.length}개</b> 농장`;
+
+  if(shipRiskOnlyUnchecked) overFarms = overFarms.filter(sm=>!shipRiskChecked.has(sm.farm));
+
+  overFarms = overFarms.slice().sort((a,b)=>{
+    let va, vb;
+    switch(shipRiskSortField){
+      case '최고일령': va=a.최고; vb=b.최고; break;
+      case '출하대상': va=a.두수합; vb=b.두수합; break;
+      default: va=a.정체율; vb=b.정체율; break; // '정체율'
+    }
+    const cmp = va - vb;
+    return shipRiskSortDir==='asc' ? cmp : -cmp;
+  });
+
+  const box = document.getElementById('shiprisk-cards-box');
+  const countTag = document.getElementById('shiprisk-result-count');
+  if(countTag) countTag.textContent = `${overFarms.length}개 농장`;
+  if(!box) return;
+  box.innerHTML = overFarms.length ? overFarms.map(sm=>shipRiskCardHtml(sm, shipRiskRefDate)).join('') : '<p class="upload-status">조건에 해당하는 농장이 없습니다 ✅</p>';
+}
+
+function shipRiskCardHtml(sm, refDate){
+  const { farm, farmGroups } = sm;
+  const expanded = shipRiskExpandedFarms.has(farm);
+  const isChecked = shipRiskChecked.has(farm);
+  const safeFarm = farm.replace(/'/g,"\\'");
+  const barCls = sm.정체율>=70?'danger':(sm.정체율>=30?'warn':'');
+  const subRows = farmGroups.slice()
+    .filter(g=>{ const age=computeGroupAgeDays(g, refDate); return age!==null && age>=shipRiskTargetDay && (Number(g.현재고)||0)>0; })
+    .sort((a,b)=>(b.전입일||'').localeCompare(a.전입일||''))
+    .map(g=>{
+      const age = computeGroupAgeDays(g, refDate);
+      const survivalText = (function(){ const r=getRearingSurvivalRate(g); return r===null?'-':r.toFixed(1)+'%'; })();
+      return `<tr>
+        <td>${g.그룹명||'-'}</td>
+        <td style="text-align:center;">${g.전입일||'-'}</td>
+        <td style="text-align:center;">${age===null?'-':age+'일'}</td>
+        <td style="text-align:center;">${(Number(g.전입두수)||0).toLocaleString('ko-KR')}</td>
+        <td style="text-align:center;">${(Number(g.현재고)||0).toLocaleString('ko-KR')}</td>
+        <td style="text-align:center;">${survivalText}</td>
+      </tr>`;
+    }).join('');
+
+  return `<div class="farm-card ${expanded?'expanded':''}" onclick="shipriskToggleFarmExpand('${safeFarm}')">
+    <div class="farm-card-top">
+      <div class="farm-card-name">${escapeHtml(farm)}</div>
+      <div class="farm-card-stat stat-danger"><b>${sm.두수합.toLocaleString('ko-KR')}두</b><span class="stat-label">출하대상</span></div>
+      <div class="farm-card-stat"><b>${sm.지연개수}개</b><span class="stat-label">지연 그룹</span></div>
+      <div class="farm-card-stat"><b>${sm.최고}/${sm.평균}일</b><span class="stat-label">최고/평균</span></div>
+      <div class="farm-card-stat"><b>${sm.육성률가중.toFixed(1)}%</b><span class="stat-label">육성률</span></div>
+      <div onclick="event.stopPropagation()"><label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap;"><input type="checkbox" ${isChecked?'checked':''} onchange="toggleShipRiskChecked('${safeFarm}')"> 점검완료</label></div>
+      <span class="severity-chip ${sm.severity}">${sm.severityLabel}</span>
+      <span class="farm-card-chevron">▾</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill ${barCls}" style="width:${sm.정체율}%"></div></div>
+    <div class="progress-pct">정체율 ${sm.정체율}%</div>
+    ${expanded ? `<div class="farm-card-subtable" onclick="event.stopPropagation();"><div class="table-wrap"><table>
+      <thead><tr><th>그룹명</th><th>전입일</th><th>사육일령</th><th>전입두수</th><th>현재고</th><th>육성율</th></tr></thead>
+      <tbody>${subRows}</tbody>
+    </table></div></div>` : ''}
+  </div>`;
+}
+
+function shipriskToggleFarmExpand(farm){
+  if(shipRiskExpandedFarms.has(farm)) shipRiskExpandedFarms.delete(farm); else shipRiskExpandedFarms.add(farm);
+  renderShipmentReadyFarms();
+}
+
+function toggleShipRiskChecked(farm){
+  if(shipRiskChecked.has(farm)) shipRiskChecked.delete(farm); else shipRiskChecked.add(farm);
+  renderShipmentReadyFarms();
+}
+
+function setShipRiskTarget(v){
+  shipRiskTargetDay = v;
+  document.querySelectorAll('#shipRiskTargetToggle button').forEach(b=> b.classList.toggle('active', Number(b.dataset.val)===v));
+  renderShipmentReadyFarms();
+}
+
+function onShipRiskRefDateChange(){
+  const el = document.getElementById('shipRiskRefDate');
+  if(el) shipRiskRefDate = el.value;
+  renderShipmentReadyFarms();
+}
+
+function toggleShipRiskSortDir(){
+  const sel = document.getElementById('shipRiskSortField');
+  if(sel) shipRiskSortField = sel.value;
+  shipRiskSortDir = shipRiskSortDir==='asc' ? 'desc' : 'asc';
+  const btn = document.getElementById('shipRiskSortDirBtn');
+  if(btn) btn.textContent = shipRiskSortDir==='asc' ? '오름차순 ▲' : '내림차순 ▼';
+  renderShipmentReadyFarms();
+}
+
+function toggleShipRiskUncheckedOnly(){
+  shipRiskOnlyUnchecked = !shipRiskOnlyUnchecked;
+  const btn = document.getElementById('shipRiskUncheckedBtn');
+  if(btn) btn.classList.toggle('active', shipRiskOnlyUnchecked);
+  renderShipmentReadyFarms();
+}
+
+function toggleShipRiskExpandAll(){
+  const allOpen = shipRiskExpandedFarms.size > 0;
+  if(allOpen){
+    shipRiskExpandedFarms.clear();
+  } else {
+    const allBiyuk = REARING_GROUPS.filter(g=>(g.돼지구분||'').trim()!=='자돈');
+    const { summaries } = computeFarmDelaySummaries(allBiyuk, shipRiskTargetDay, shipRiskRefDate);
+    summaries.filter(sm=>sm.지연개수>0).forEach(sm=>shipRiskExpandedFarms.add(sm.farm));
+  }
+  const btn = document.getElementById('shipRiskExpandAllBtn');
+  if(btn) btn.textContent = allOpen ? '모두 펼치기' : '모두 접기';
+  renderShipmentReadyFarms();
+}
+
+document.querySelectorAll('.view-nav-btn').forEach(btn=>{
+  if(btn.dataset.view==='shiprisk'){
+    btn.addEventListener('click', ()=>{
+      if(!rearingLoaded){
+        loadRearingFromAPI().then(()=>{
+          rearingLoaded = true;
+          renderRearingAll();
+          renderShipmentReadyFarms();
+        });
+      } else {
+        renderShipmentReadyFarms();
+      }
+    });
+  }
+});
 
 let biyukTargetDay = 170;
 let biyukRefDate = null;
