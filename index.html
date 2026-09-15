@@ -4754,7 +4754,9 @@ function normalizeCompany(c){
 //  - 영천: 출하평체(총생체중/두수) + 평균등지방두께로 구간을 정하고, 그 구간 안에서 암/거세 지급율이 다름
 //          (예: 113~118kg·등지방19~24mm → 암78.0%/거세76.0%). 마리별 성별로 나눠 도체중 가중평균하며,
 //          등외는 구간과 무관하게 50% 고정.
-//  - 신선: 계약 공식 없음 — 직접입력(지급율직접)으로만 반영, 자동계산은 null
+//  - 신선(일반): 1등급이상 출현율(=등급율) 구간별 — 95.1%이상 79.5%, 90.1~95.0% 79.0%, 85.1~90.0% 78.5%,
+//               80.1~85.0% 76.5%, 75.1~80.0% 77.0%, 70.0~75.0% 76.5%, 65.0~69.9% 75.0%, 60.0~64.9% 74.0%,
+//               50.0~54.9% 72.0%, 49.9%이하 69.0%. 등외는 구간과 무관하게 50% 고정
 //  - 그 외(기타 등): 자동계산하지 않고 null 반환(표에는 '미정'으로 표시)
 
 // 등판서(등급판정서) 데이터가 실제로 등록됐는지 판단: 지육율/등급분포 중 하나라도 값이 있으면 등록된 것으로 봄
@@ -4796,6 +4798,20 @@ function yeongcheonTierRate(출하평체, 평균등지방, isFemale){
   if(출하평체>=107 && 출하평체<132) return isFemale?73.0:70.5;
   if(출하평체>0) return isFemale?55.5:52.0;
   return null;
+}
+
+// 신선(일반): 1등급이상 출현율(=등급율) 구간별 지급율(%). 등외는 구간과 무관하게 별도로 50% 고정 처리됨(호출부 참고).
+function sinseonNormalTierRate(등급율){
+  if(등급율 >= 95.1) return 79.5;
+  if(등급율 >= 90.1) return 79.0;
+  if(등급율 >= 85.1) return 78.5;
+  if(등급율 >= 80.1) return 76.5;
+  if(등급율 >= 75.1) return 77.0;
+  if(등급율 >= 70.0) return 76.5;
+  if(등급율 >= 65.0) return 75.0;
+  if(등급율 >= 60.0) return 74.0;
+  if(등급율 >= 50.0) return 72.0;
+  return 69.0;
 }
 
 function computeExpectedPayRate(shipment){
@@ -4840,10 +4856,26 @@ function computeExpectedPayRate(shipment){
     return sumW ? (sumRateW/sumW) : null;
   }
 
+  if(company === '신선'){
+    const 등급율 = computeGradeRate(shipment);
+    if(등급율===null) return null;
+    const tierRate = sinseonNormalTierRate(등급율);
+    const animals = shipment.animals;
+    if(!animals || !animals.length) return tierRate;
+    let sumW = 0, sumRateW = 0;
+    animals.forEach(a=>{
+      const w = Number(a.도체중) || 1;
+      const isOff = String(a.최종등급||'').trim()==='등외';
+      const rate = isOff ? 50 : tierRate;
+      sumW += w; sumRateW += rate * w;
+    });
+    return sumW ? (sumRateW/sumW) : tierRate;
+  }
+
   let standardRate, 등외Rate;
   if(company === '약감포크'){ standardRate = 0.775; 등외Rate = 0.55; }
   else if(company === '동아미트'){ standardRate = 0.775; 등외Rate = 0.5; }
-  else return null; // 신선/기타 등은 계약 공식이 없어 직접입력으로만 반영
+  else return null; // 기타 등은 계약 공식이 없어 직접입력으로만 반영
 
   const animals = shipment.animals;
   let result;
@@ -6238,17 +6270,18 @@ function rearingBucketDetailRows(events, bucket){
   const byFarmGroup = new Map();
   bucketEvents.forEach(e=>{
     const key = e.농장명+'|'+e.그룹명;
-    if(!byFarmGroup.has(key)) byFarmGroup.set(key, { 농장명:e.농장명, 그룹명:e.그룹명, 폐사두수:0, 원인목록:new Set(), 비고목록:new Set(), ids:[] });
+    if(!byFarmGroup.has(key)) byFarmGroup.set(key, { 농장명:e.농장명, 그룹명:e.그룹명, 폐사두수:0, 원인목록:new Set(), 조치사항목록:new Set(), 비고목록:new Set(), ids:[] });
     const row = byFarmGroup.get(key);
     row.폐사두수 += Number(e.폐사두수)||0;
     if(e.원인) row.원인목록.add(e.원인);
+    if(e.조치사항) row.조치사항목록.add(e.조치사항);
     if(e.비고) row.비고목록.add(e.비고);
     if(e.id!==undefined && e.id!==null) row.ids.push(e.id);
   });
   return [...byFarmGroup.values()].map(r=>{
     const mKey = groupMatchKeyFromMortality({농장명:r.농장명, 그룹명:r.그룹명});
     const group = REARING_GROUPS.find(g=> g.농장명===r.농장명 && groupMatchKeyFromRearingGroup(g)===mKey);
-    return { ...r, 전입일: group ? group.전입일 : '-', 사유: [...r.원인목록].join(', '), 비고: [...r.비고목록].join(', ') };
+    return { ...r, 전입일: group ? group.전입일 : '-', 사유: [...r.원인목록].join(', '), 조치사항: [...r.조치사항목록].join(', '), 비고: [...r.비고목록].join(', ') };
   }).sort((a,b)=> b.폐사두수 - a.폐사두수);
 }
 
@@ -6270,11 +6303,13 @@ function startEditRearingReason(containerId, farmGroupKey){
 async function saveRearingReason(containerId, farmGroupKey, ids){
   const domKey = safeDomId(farmGroupKey);
   const 사유El = document.getElementById(`rbr-사유-${domKey}`);
+  const 조치사항El = document.getElementById(`rbr-조치사항-${domKey}`);
   const 비고El = document.getElementById(`rbr-비고-${domKey}`);
   const 사유 = 사유El ? 사유El.value.trim() : '';
+  const 조치사항 = 조치사항El ? 조치사항El.value.trim() : '';
   const 비고 = 비고El ? 비고El.value.trim() : '';
   try{
-    await rearingApiRequest({ action:'setMortalityReason', ids, 사유, 비고 });
+    await rearingApiRequest({ action:'setMortalityReason', ids, 사유, 조치사항, 비고 });
     await loadRearingFromAPI();
     rearingBucketEditingKey = null;
     if(containerId==='rearing-week-box') renderRearingWeekSection();
@@ -6303,7 +6338,7 @@ function rearingBucketTableHtml(events, totalStock, containerId){
     const detailHtml = `<tr><td colspan="3" style="padding:0;background:#faf9f6;">
       <div class="table-wrap" style="margin:6px 10px;">
         <table style="width:100%;font-size:12.5px;">
-          <thead><tr><th>농장</th><th>전입일</th><th>배치</th><th>폐사두수</th><th>사유</th><th>비고</th><th></th></tr></thead>
+          <thead><tr><th>농장</th><th>전입일</th><th>배치</th><th>폐사두수</th><th>사유</th><th style="min-width:220px;">조치사항</th><th>비고</th><th></th></tr></thead>
           <tbody>
             ${detailRows.map(d=>{
               const fgKey = d.농장명+'|'+d.그룹명;
@@ -6313,13 +6348,16 @@ function rearingBucketTableHtml(events, totalStock, containerId){
                 return `<tr onclick="event.stopPropagation()">
                   <td>${escapeHtml(d.농장명)}</td><td>${d.전입일||'-'}</td><td>${escapeHtml(d.그룹명)}</td><td>${d.폐사두수}</td>
                   <td><input id="rbr-사유-${domKey}" value="${escapeHtml(d.사유||'')}" placeholder="폐사사유" style="width:100px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 5px;font-size:12px;"></td>
+                  <td><textarea id="rbr-조치사항-${domKey}" placeholder="조치사항 (예: 환기 개선, 사료 급이량 조정, 수의사 진료 등)" rows="2" style="width:260px;border:1px solid #e2e8e4;border-radius:6px;padding:5px 7px;font-size:12px;font-family:inherit;resize:vertical;">${escapeHtml(d.조치사항||'')}</textarea></td>
                   <td><input id="rbr-비고-${domKey}" value="${escapeHtml(d.비고||'')}" placeholder="비고" style="width:100px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 5px;font-size:12px;"></td>
                   <td><button class="tab-btn active" style="padding:2px 8px;font-size:11px;" onclick="saveRearingReason('${containerId}','${fgKey.replace(/'/g,"\\'")}',${JSON.stringify(d.ids)})">저장</button></td>
                 </tr>`;
               }
               return `<tr onclick="event.stopPropagation(); startEditRearingReason('${containerId}','${fgKey.replace(/'/g,"\\'")}')" style="cursor:pointer;">
                 <td>${escapeHtml(d.농장명)}</td><td>${d.전입일||'-'}</td><td>${escapeHtml(d.그룹명)}</td><td>${d.폐사두수}</td>
-                <td>${d.사유?escapeHtml(d.사유):'<span style="color:var(--muted);">입력하기</span>'}</td><td>${escapeHtml(d.비고)||'-'}</td><td></td>
+                <td>${d.사유?escapeHtml(d.사유):'<span style="color:var(--muted);">입력하기</span>'}</td>
+                <td style="white-space:normal;min-width:220px;">${d.조치사항?escapeHtml(d.조치사항):'<span style="color:var(--muted);">-</span>'}</td>
+                <td>${escapeHtml(d.비고)||'-'}</td><td></td>
               </tr>`;
             }).join('')}
           </tbody>
