@@ -697,15 +697,11 @@
   <div class="section-title">비육 종합현황</div>
   <div class="kpi-row" id="rearing-kpi-row-biyuk"></div>
 
-  <div class="section-title">자돈농장별 1개월 이내 폐사비율</div>
-  <p style="font-size:12px;color:var(--muted);margin:2px 0 6px;">자돈농장 카드를 클릭하면 해당 자돈농장에서 넘어온 비육농장별 1개월 이내 폐사비율이 펼쳐집니다.</p>
-  <div id="rearing-piglet-mortality-box"></div>
-
   <div style="display:flex;align-items:center;gap:10px;margin:18px 0 8px;">
-    <div class="section-title" style="margin:0;">자돈 전입 관리 보고서</div>
+    <div class="section-title" style="margin:0;">자돈전입 1개월 이내 관리현황</div>
     <span style="font-size:12px;color:var(--muted);">(천하,태평·오케이·돈앤돈·신한양·한양·해오름·창신)</span>
     <div style="flex:1;"></div>
-    <button class="tab-btn active" onclick="exportPigletIntakeReportExcel(event)">📥 자돈 전입 관리 보고서 엑셀</button>
+    <button class="tab-btn active" onclick="exportPigletIntakeReportExcel(event)">📥 자돈전입 1개월 이내 관리현황 엑셀</button>
   </div>
   <div id="piglet-intake-report-box"></div>
 
@@ -6081,7 +6077,6 @@ function computePigletIntakeReportRows(){
 
 function togglePigletMortFarm(farm){
   pigletMortExpanded[farm] = !pigletMortExpanded[farm];
-  renderPigletFarmMortalityBox('rearing-piglet-mortality-box');
   renderPigletFarmMortalityBox('report-piglet-mortality-box');
 }
 
@@ -6091,7 +6086,6 @@ let pigletMortLinkedExpanded = {}; // key = `${자돈농장}::${비육농장}`
 function togglePigletMortLinkedFarm(sourceFarm, bfFarm){
   const key = `${sourceFarm}::${bfFarm}`;
   pigletMortLinkedExpanded[key] = !pigletMortLinkedExpanded[key];
-  renderPigletFarmMortalityBox('rearing-piglet-mortality-box');
   renderPigletFarmMortalityBox('report-piglet-mortality-box');
 }
 
@@ -6277,7 +6271,7 @@ function buildPigletIntakeReportWorkbook(XS, rangeLabel, rows){
   }
 
   const titleBorder = { bottom: { style:'medium', color:{rgb:REPORT_XLSX_COLORS.accent} } };
-  put(r, 0, `4팀 자돈 전입 관리 보고서 · ${rangeLabel}`, { font:{bold:true, sz:16, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.title}}, alignment:{vertical:'center', horizontal:'left', indent:1}, border: titleBorder });
+  put(r, 0, `4팀 자돈전입 1개월 이내 관리현황 · ${rangeLabel}`, { font:{bold:true, sz:16, color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:REPORT_XLSX_COLORS.title}}, alignment:{vertical:'center', horizontal:'left', indent:1}, border: titleBorder });
   fillRow(r, { fill:{fgColor:{rgb:REPORT_XLSX_COLORS.title}}, border: titleBorder }, 1, NCOLS-1);
   merges.push({s:{r,c:0}, e:{r,c:NCOLS-1}});
   ws['!rows'] = ws['!rows'] || [];
@@ -6369,8 +6363,8 @@ async function exportPigletIntakeReportExcel(evt){
     const XS = await loadXlsxStyleLib();
     const wb = XS.utils.book_new();
     const ws = buildPigletIntakeReportWorkbook(XS, `${start} ~ ${end}`, rows);
-    XS.utils.book_append_sheet(wb, ws, '자돈전입관리');
-    XS.writeFile(wb, `4팀_자돈전입관리보고서_${end}.xlsx`);
+    XS.utils.book_append_sheet(wb, ws, '자돈전입관리현황');
+    XS.writeFile(wb, `4팀_자돈전입1개월관리현황_${end}.xlsx`);
   }catch(e){
     alert('엑셀 생성 실패: ' + e.message);
   }finally{
@@ -8822,7 +8816,6 @@ function renderMortalityTable(){
 
 function renderRearingAll(){
   renderRearingKPI();
-  renderPigletFarmMortalityBox('rearing-piglet-mortality-box');
   renderPigletIntakeReportBox();
   renderBiyukFarmStatusBox();
   renderMonthlyIntakeBox();
