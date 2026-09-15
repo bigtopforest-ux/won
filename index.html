@@ -680,10 +680,25 @@
   <div class="section-title">출하가 안 나가는 농장</div>
   <p style="font-size:12px;color:var(--muted);margin:2px 0 10px;" id="shiprisk-sub">출하 목표일(일령)을 넘겼는데 아직 재고로 남아있는 농장을 모아서 매일 점검할 수 있게 정리했어요. 점검완료 체크는 화면을 새로고침하면 초기화됩니다.</p>
 
+  <div class="upload-box" id="shiprisk-groups-dropzone">
+    <div class="upload-box-head">
+      <strong><svg class="upload-icon" viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13.2V4M6.3 7.6 10 4l3.7 3.6"/><path d="M4 14.6v1.1c0 .7.6 1.3 1.3 1.3h9.4c.7 0 1.3-.6 1.3-1.3v-1.1"/></svg> 사육그룹내역 엑셀 업로드</strong>
+      <button type="button" class="upload-info-btn" onclick="toggleUploadInfo(this)">?</button>
+    </div>
+    <div class="upload-info-panel">그룹별 현재 사육현황 스냅샷입니다. 그룹명 기준으로 기존 데이터와 병합되며, 사육현황관리 탭의 업로드와 동일한 내용을 반영합니다. 파일을 이 박스로 끌어다 놓아도 됩니다.</div>
+    <div class="upload-box-row">
+      <input type="file" id="shiprisk-groups-file" accept=".xlsx,.xls">
+      <input type="text" id="shiprisk-groups-editor" placeholder="등록자 이름" style="border:1px solid #e2e8e4;border-radius:8px;padding:8px 10px;font-size:13px;width:120px;">
+      <button class="tab-btn active" onclick="uploadShipRiskGroups()">업로드</button>
+      <span class="upload-status" id="shiprisk-groups-status"></span>
+    </div>
+  </div>
+
   <div class="delay-toolbar">
     <div class="delay-toolbar-group">
       <span style="font-size:13px;color:var(--muted);font-weight:600;">출하 목표</span>
       <div class="target-toggle" id="shipRiskTargetToggle">
+        <button type="button" data-val="150" onclick="setShipRiskTarget(150)">150</button>
         <button type="button" data-val="170" onclick="setShipRiskTarget(170)">170</button>
         <button type="button" data-val="175" onclick="setShipRiskTarget(175)">175</button>
         <button type="button" data-val="180" class="active" onclick="setShipRiskTarget(180)">180</button>
@@ -5609,6 +5624,26 @@ async function uploadRearingGroups(){
   }
 }
 
+async function uploadShipRiskGroups(){
+  const fileInput = document.getElementById('shiprisk-groups-file');
+  const statusEl = document.getElementById('shiprisk-groups-status');
+  const editor = document.getElementById('shiprisk-groups-editor').value.trim();
+  if(!fileInput.files.length){ statusEl.textContent = '파일을 선택해주세요'; return; }
+  statusEl.textContent = '읽는 중...';
+  try{
+    const rows = await parseRearingGroupsFile(fileInput.files[0]);
+    if(!rows.length){ statusEl.textContent = '유효한 데이터 행이 없습니다 (그룹명 컬럼 확인)'; return; }
+    const result = await rearingApiRequest({ action:'uploadGroups', rows, editor });
+    statusEl.textContent = `완료: 신규 ${result.added}건, 갱신 ${result.updated}건 (전체 ${result.total}건)`;
+    rearingLoaded = true;
+    await loadRearingFromAPI();
+    renderRearingAll();
+    renderShipmentReadyFarms();
+  }catch(e){
+    statusEl.textContent = '오류: ' + e.message;
+  }
+}
+
 async function uploadRearingMortality(){
   const fileInput = document.getElementById('rearing-mortality-file');
   const statusEl = document.getElementById('rearing-mortality-status');
@@ -5722,6 +5757,7 @@ function wireRearingDropzone(zoneId, fileInputId){
   });
 }
 wireRearingDropzone('rearing-groups-dropzone','rearing-groups-file');
+wireRearingDropzone('shiprisk-groups-dropzone','shiprisk-groups-file');
 wireRearingDropzone('rearing-mortality-dropzone','rearing-mortality-file');
 wireRearingDropzone('heatwave-upload-dropzone','heatwave-excel-file');
 
