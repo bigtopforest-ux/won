@@ -744,6 +744,10 @@
   <p style="font-size:12px;color:var(--muted);margin:2px 0 6px;">자돈농장 카드를 클릭하면 해당 자돈농장에서 넘어온 비육농장별 1개월 이내 폐사비율이 펼쳐집니다.</p>
   <div id="rearing-piglet-mortality-box"></div>
 
+  <div class="section-title">비육농장 현황</div>
+  <p style="font-size:12px;color:var(--muted);margin:2px 0 6px;">사육중인 비육농장을 농장별로 모아서 보여줍니다. 농장명을 클릭하면 배치(그룹)별 상세가 펼쳐집니다.</p>
+  <div id="biyuk-farm-status-box"></div>
+
   <div style="display:flex;align-items:center;gap:10px;margin:18px 0 8px;">
     <div class="section-title" style="margin:0;">월별 전입 현황</div>
     <div style="flex:1;"></div>
@@ -6010,6 +6014,104 @@ function renderPigletFarmMortalityBox(containerId){
   box.innerHTML = sourceCards + unmatchedSection + `<div style="margin-top:12px;">${renderPigletTotalRow(sources, unmatchedFarms)}</div>`;
 }
 
+// ---- 비육농장 현황 (자돈농장별 1개월 이내 폐사비율과 월별 전입 현황 사이) ----
+const biyukFarmStatusExpanded = new Set(); // 배치별 상세를 펼친 농장명 목록
+
+function computeBiyukFarmStatusRows(){
+  const groups = REARING_GROUPS.filter(g=>g.상태==='사육중' && (g.돼지구분||'').trim()!=='자돈');
+  const byFarm = {};
+  groups.forEach(g=>{
+    const farm = (g.농장명||'').trim() || '(농장명 없음)';
+    (byFarm[farm] = byFarm[farm] || []).push(g);
+  });
+  return Object.keys(byFarm).map(farm=>{
+    const farmGroups = byFarm[farm];
+    const 전입두수 = farmGroups.reduce((s,g)=>s+(Number(g.전입두수)||0),0);
+    const 폐사두수 = farmGroups.reduce((s,g)=>s+(Number(g.폐사두수)||0),0);
+    const 판매두수 = farmGroups.reduce((s,g)=>s+(Number(g.판매두수)||0),0);
+    const 현재고 = farmGroups.reduce((s,g)=>s+(Number(g.현재고)||0),0);
+    const 육성율 = 전입두수 ? ((현재고+판매두수)/전입두수*100) : 0;
+    return { farm, groups: farmGroups, 전입두수, 폐사두수, 판매두수, 현재고, 육성율 };
+  }).sort((a,b)=>a.farm.localeCompare(b.farm,'ko'));
+}
+
+function toggleBiyukFarmStatus(farm){
+  if(biyukFarmStatusExpanded.has(farm)) biyukFarmStatusExpanded.delete(farm);
+  else biyukFarmStatusExpanded.add(farm);
+  renderBiyukFarmStatusBox();
+}
+
+function renderBiyukFarmStatusBox(){
+  const box = document.getElementById('biyuk-farm-status-box');
+  if(!box) return;
+  const rows = computeBiyukFarmStatusRows();
+  if(!rows.length){
+    box.innerHTML = `<p style="color:var(--muted);font-size:13px;padding:10px 0;">사육중인 비육농장 데이터가 없습니다.</p>`;
+    return;
+  }
+  const totalIn = rows.reduce((s,r)=>s+r.전입두수,0);
+  const totalDead = rows.reduce((s,r)=>s+r.폐사두수,0);
+  const totalSold = rows.reduce((s,r)=>s+r.판매두수,0);
+  const totalStock = rows.reduce((s,r)=>s+r.현재고,0);
+  const totalRate = totalIn ? ((totalStock+totalSold)/totalIn*100) : 0;
+
+  const bodyRows = rows.map(r=>{
+    const expanded = biyukFarmStatusExpanded.has(r.farm);
+    const safeFarm = r.farm.replace(/'/g,"\\'");
+    const detailRow = !expanded ? '' : `
+      <tr>
+        <td colspan="7" style="padding:10px 10px 12px 20px;background:var(--bg);">
+          <div class="table-wrap" style="margin:0;"><table style="border:1px solid var(--border);">
+            <thead><tr><th>그룹명</th><th>전입일</th><th style="text-align:right;">전입두수</th><th style="text-align:right;">폐사두수</th><th style="text-align:right;">출하두수</th><th style="text-align:right;">육성율</th><th style="text-align:right;">현재고</th></tr></thead>
+            <tbody>
+              ${r.groups.slice().sort((a,b)=>(a.전입일||'').localeCompare(b.전입일||'')).map(g=>{
+                const gr = getRearingSurvivalRate(g);
+                return `<tr>
+                  <td>${g.그룹명||'-'}</td>
+                  <td style="color:var(--muted);">${g.전입일||'-'}</td>
+                  <td style="text-align:right;">${(Number(g.전입두수)||0).toLocaleString('ko-KR')}두</td>
+                  <td style="text-align:right;">${(Number(g.폐사두수)||0).toLocaleString('ko-KR')}두</td>
+                  <td style="text-align:right;color:var(--accent);">${(Number(g.판매두수)||0).toLocaleString('ko-KR')}두</td>
+                  <td style="text-align:right;">${gr===null?'-':gr.toFixed(1)+'%'}</td>
+                  <td style="text-align:right;">${(Number(g.현재고)||0).toLocaleString('ko-KR')}두</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table></div>
+        </td>
+      </tr>`;
+    return `
+      <tr>
+        <td style="font-weight:600;"><a href="javascript:void(0)" onclick="toggleBiyukFarmStatus('${safeFarm}')" style="color:var(--accent);text-decoration:underline;">${escapeHtml(r.farm)}</a></td>
+        <td>${escapeHtml(FARM_MANAGERS[r.farm]||'-')}</td>
+        <td style="text-align:right;">${r.전입두수.toLocaleString('ko-KR')}두</td>
+        <td style="text-align:right;">${r.폐사두수.toLocaleString('ko-KR')}두</td>
+        <td style="text-align:right;color:var(--accent);">${r.판매두수.toLocaleString('ko-KR')}두</td>
+        <td style="text-align:right;">${r.육성율.toFixed(1)}%</td>
+        <td style="text-align:right;">${r.현재고.toLocaleString('ko-KR')}두</td>
+      </tr>${detailRow}`;
+  }).join('');
+
+  box.innerHTML = `
+    <table>
+      <thead><tr>
+        <th style="text-align:left;">농장명</th><th style="text-align:left;">담당자</th><th style="text-align:right;">전입두수</th><th style="text-align:right;">폐사두수</th><th style="text-align:right;">출하두수</th><th style="text-align:right;">육성율</th><th style="text-align:right;">현재고</th>
+      </tr></thead>
+      <tbody>
+        ${bodyRows}
+        <tr class="total-row">
+          <td>합계</td>
+          <td>-</td>
+          <td style="text-align:right;">${totalIn.toLocaleString('ko-KR')}두</td>
+          <td style="text-align:right;">${totalDead.toLocaleString('ko-KR')}두</td>
+          <td style="text-align:right;">${totalSold.toLocaleString('ko-KR')}두</td>
+          <td style="text-align:right;">${totalRate.toFixed(1)}%</td>
+          <td style="text-align:right;">${totalStock.toLocaleString('ko-KR')}두</td>
+        </tr>
+      </tbody>
+    </table>`;
+}
+
 function renderRearingKPI(){
   const box1 = document.getElementById('rearing-kpi-row-1');
   const box2 = document.getElementById('rearing-kpi-row-2');
@@ -6143,32 +6245,40 @@ function renderMonthlyIntakeBox(){
   const totalSold = rows.reduce((s,r)=>s+r.sold두수,0);
   const totalStock = rows.reduce((s,r)=>s+r.stock두수,0);
 
-  const detailColStyle = ['text-align:left;','text-align:left;','text-align:right;','text-align:right;','text-align:right;'];
+  const detailColStyle = ['text-align:left;','text-align:left;','text-align:left;','text-align:right;','text-align:right;','text-align:right;','text-align:right;','text-align:right;'];
   const bodyRows = rows.map(r=>{
     const expanded = monthlyIntakeExpanded.has(r.mon);
     const detailRow = !expanded ? '' : `
       <tr>
         <td colspan="5" style="padding:12px 10px 14px 26px;background:var(--bg);">
           <table style="border:1px solid var(--border);border-radius:8px;margin:0;width:100%;background:var(--card);table-layout:fixed;">
-            <colgroup><col style="width:34%;"><col style="width:16%;"><col style="width:16.5%;"><col style="width:16.5%;"><col style="width:17%;"></colgroup>
+            <colgroup><col style="width:19%;"><col style="width:10%;"><col style="width:12%;"><col style="width:11.5%;"><col style="width:11.5%;"><col style="width:11.5%;"><col style="width:11.5%;"><col style="width:13%;"></colgroup>
             <thead>
               <tr>
                 <th style="${detailColStyle[0]}">농장명 / 그룹명</th>
-                <th style="${detailColStyle[1]}">전입일</th>
-                <th style="${detailColStyle[2]}">전입두수</th>
-                <th style="${detailColStyle[3]}">판매두수</th>
-                <th style="${detailColStyle[4]}">재고두수</th>
+                <th style="${detailColStyle[1]}">담당자</th>
+                <th style="${detailColStyle[2]}">전입일</th>
+                <th style="${detailColStyle[3]}">전입두수</th>
+                <th style="${detailColStyle[4]}">폐사두수</th>
+                <th style="${detailColStyle[5]}">출하두수</th>
+                <th style="${detailColStyle[6]}">육성율</th>
+                <th style="${detailColStyle[7]}">현재고두수</th>
               </tr>
             </thead>
             <tbody>
-              ${r.groups.length ? r.groups.map(g=>`
+              ${r.groups.length ? r.groups.map(g=>{
+                const gr = getRearingSurvivalRate(g);
+                return `
                 <tr>
                   <td style="${detailColStyle[0]}color:var(--ink);font-weight:600;">${g.농장명||''}${g.그룹명?` <span style="color:var(--muted);font-weight:400;">(${g.그룹명})</span>`:''}</td>
-                  <td style="${detailColStyle[1]}color:var(--muted);">${g.전입일||''}</td>
-                  <td style="${detailColStyle[2]}">${(Number(g.전입두수)||0).toLocaleString('ko-KR')}두</td>
-                  <td style="${detailColStyle[3]}color:var(--accent);">${(Number(g.판매두수)||0).toLocaleString('ko-KR')}두</td>
-                  <td style="${detailColStyle[4]}">${(Number(g.현재고)||0).toLocaleString('ko-KR')}두</td>
-                </tr>`).join('') : `<tr><td colspan="5" style="text-align:center;color:var(--muted);">해당 월 전입 내역 없음</td></tr>`}
+                  <td style="${detailColStyle[1]}color:var(--muted);">${escapeHtml(FARM_MANAGERS[(g.농장명||'').trim()]||'-')}</td>
+                  <td style="${detailColStyle[2]}color:var(--muted);">${g.전입일||''}</td>
+                  <td style="${detailColStyle[3]}">${(Number(g.전입두수)||0).toLocaleString('ko-KR')}두</td>
+                  <td style="${detailColStyle[4]}">${(Number(g.폐사두수)||0).toLocaleString('ko-KR')}두</td>
+                  <td style="${detailColStyle[5]}color:var(--accent);">${(Number(g.판매두수)||0).toLocaleString('ko-KR')}두</td>
+                  <td style="${detailColStyle[6]}">${gr===null?'-':gr.toFixed(1)+'%'}</td>
+                  <td style="${detailColStyle[7]}">${(Number(g.현재고)||0).toLocaleString('ko-KR')}두</td>
+                </tr>`;}).join('') : `<tr><td colspan="8" style="text-align:center;color:var(--muted);">해당 월 전입 내역 없음</td></tr>`}
             </tbody>
           </table>
         </td>
@@ -8278,6 +8388,7 @@ function renderMortalityTable(){
 function renderRearingAll(){
   renderRearingKPI();
   renderPigletFarmMortalityBox('rearing-piglet-mortality-box');
+  renderBiyukFarmStatusBox();
   renderMonthlyIntakeBox();
   renderRearingAlertSummary();
   renderRearingWeekSection();
