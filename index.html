@@ -17,6 +17,7 @@
     --danger:#B0281F; --danger-light:#F8E7E4;
     --warn:#D97B0A; --warn-light:#FCEEDC;
     --success:#4C7A2E; --success-light:#EAF1E1;
+    --info:#4A7FA8;
     --kpi-num:#221C1C;
     --total-bg:#FFF3D6; --total-border:#E8C567; --total-text:#7A5A0E;
   }
@@ -426,6 +427,14 @@
     </div>
     <div id="excluded-item-list"></div>
     <div style="margin-top:8px;"><button class="tab-btn active" onclick="saveExcludedItems()">제외 품목 저장</button> <span class="upload-status" id="excluded-item-status"></span></div>
+  </div>
+
+  <div class="section-title">월별 지역부장별 사용금액</div>
+  <p style="font-size:12px;color:var(--muted);margin:2px 0 6px;">위에서 선택한 마감월 기준, 지역부장별 약품비 사용금액을 재고두수·전입두수·출하두수 각각을 기준으로 한 두당 금액으로 비교합니다.</p>
+  <div class="charts">
+    <div class="chart-card"><h3>재고두수기준 약품비 사용금액</h3><div class="count-tag" id="chartMedRegionStockStat"></div><canvas id="chartMedRegionStock"></canvas></div>
+    <div class="chart-card"><h3>전입두수기준 약품비 사용금액</h3><div class="count-tag" id="chartMedRegionInStat"></div><canvas id="chartMedRegionIn"></canvas></div>
+    <div class="chart-card"><h3>출하두수기준 약품비 사용금액</h3><div class="count-tag" id="chartMedRegionOutStat"></div><canvas id="chartMedRegionOut"></canvas></div>
   </div>
 
   <div class="section-title">주차별 입식두수 · 약품비 한도</div>
@@ -1871,6 +1880,7 @@ let MED_WEEK_STOCK = [];
 let MED_STOCK_RATE = 0;
 let medicineLoaded = false;
 let medCharts = {};
+let medRegionCharts = {};
 let selectedBudgetMonth = '';
 let medChartMode = 'cumulative';
 let medChartMonth = '';
@@ -2219,6 +2229,77 @@ function medCycleRange(closingMonth){
   return { start: fmtDateYMD(startDate), end: fmtDateYMD(endDate), days };
 }
 
+// 지역부장별 약품비 사용금액을 재고두수/전입두수/출하두수 각 기준의 두당 금액으로 비교.
+// 농가명 -> 지역부장 매핑은 출하관리의 농가-지역부장 매핑(SHIPMENT_FARMMAP)을 그대로 사용해서
+// "지역부장별 월별/누적 실적" 등 다른 출하 화면과 같은 지역부장 기준으로 맞춘다.
+function computeMedRegionUsage(month){
+  const 사용금액 = {};
+  MEDICINE.filter(r=>r.구분월===month && !isExcludedRow(r)).forEach(r=>{
+    const person = lookupFarmManager(r.농가명) || '미지정';
+    사용금액[person] = (사용금액[person]||0) + (Number(r.납품금액)||0);
+  });
+
+  const range = medCycleRange(month);
+
+  const 재고두수 = {};
+  REARING_GROUPS.filter(g=>g.상태==='사육중').forEach(g=>{
+    const person = lookupFarmManager(g.농장명) || '미지정';
+    재고두수[person] = (재고두수[person]||0) + (Number(g.현재고)||0);
+  });
+
+  const 전입두수 = {};
+  if(range){
+    REARING_GROUPS.filter(g=>g.전입일 && g.전입일>=range.start && g.전입일<=range.end).forEach(g=>{
+      const person = lookupFarmManager(g.농장명) || '미지정';
+      전입두수[person] = (전입두수[person]||0) + (Number(g.전입두수)||0);
+    });
+  }
+
+  const 출하두수 = {};
+  if(range){
+    SHIPMENTS.filter(s=>s.도축일 && s.도축일>=range.start && s.도축일<=range.end).forEach(s=>{
+      const person = s.지역부장 || '미지정';
+      출하두수[person] = (출하두수[person]||0) + (Number(s.두수)||0);
+    });
+  }
+
+  const people = uniqueSorted([...Object.keys(사용금액), ...Object.keys(재고두수), ...Object.keys(전입두수), ...Object.keys(출하두수)]);
+  const perHead = headMap => people.map(p=>{
+    const heads = headMap[p]||0;
+    return heads ? Math.round((사용금액[p]||0)/heads) : 0;
+  });
+
+  return {
+    people, 사용금액, 재고두수, 전입두수, 출하두수,
+    stockPerHead: perHead(재고두수), inPerHead: perHead(전입두수), outPerHead: perHead(출하두수),
+  };
+}
+
+function renderMedRegionUsageCharts(){
+  if(!document.getElementById('chartMedRegionStock')) return;
+  const month = selectedBudgetMonth;
+  const d = computeMedRegionUsage(month);
+  Object.values(medRegionCharts).forEach(c=>c && c.destroy());
+
+  const totalCost = Object.values(d.사용금액).reduce((s,v)=>s+v,0);
+
+  function renderOne(canvasId, statId, headMap, perHeadArr, label){
+    const totalHeads = Object.values(headMap).reduce((s,v)=>s+v,0);
+    const overallPerHead = totalHeads ? Math.round(totalCost/totalHeads) : 0;
+    const statEl = document.getElementById(statId);
+    if(statEl) statEl.textContent = `총 ${fmtWon(totalCost)} · 전체 평균 ${totalHeads?fmtWon(overallPerHead):'-'}/두 (${month||'-'})`;
+    return new Chart(document.getElementById(canvasId), {
+      type:'bar',
+      data:{ labels:d.people, datasets:[{label, data:perHeadArr, backgroundColor:'#C8102E'}] },
+      options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>fmtWon(ctx.parsed.y)+'/두'}}}, scales:{y:{beginAtZero:true}}}
+    });
+  }
+
+  medRegionCharts.stock = renderOne('chartMedRegionStock','chartMedRegionStockStat', d.재고두수, d.stockPerHead, '재고두수기준 두당 약품비');
+  medRegionCharts.in = renderOne('chartMedRegionIn','chartMedRegionInStat', d.전입두수, d.inPerHead, '전입두수기준 두당 약품비');
+  medRegionCharts.out = renderOne('chartMedRegionOut','chartMedRegionOutStat', d.출하두수, d.outPerHead, '출하두수기준 두당 약품비');
+}
+
 function renderBudgetSection(){
   const monthSel = document.getElementById('budgetMonthSelect');
   const months = allBudgetMonths();
@@ -2228,6 +2309,7 @@ function renderBudgetSection(){
     monthSel.value = months.includes(curSel) ? curSel : months[months.length-1];
   }
   selectedBudgetMonth = monthSel.value || '';
+  renderMedRegionUsageCharts();
   const box = document.getElementById('budget-row');
 
   if(MED_GROUPS.length){
@@ -6048,6 +6130,14 @@ function toggleBiyukFarmStatus(farm){
   renderBiyukFarmStatusBox();
 }
 
+// 육성율 텍스트는 항상 볼드, 90% 미만은 빨간색·95% 이상은 파란색으로 강조
+function survivalRateStyle(rate){
+  if(rate===null || rate===undefined || isNaN(rate)) return 'font-weight:700;';
+  if(rate < 90) return 'font-weight:700;color:var(--danger);';
+  if(rate >= 95) return 'font-weight:700;color:var(--info);';
+  return 'font-weight:700;';
+}
+
 function renderBiyukFarmStatusBox(){
   const box = document.getElementById('biyuk-farm-status-box');
   if(!box) return;
@@ -6079,7 +6169,7 @@ function renderBiyukFarmStatusBox(){
                   <td style="text-align:right;">${(Number(g.전입두수)||0).toLocaleString('ko-KR')}두</td>
                   <td style="text-align:right;">${(Number(g.폐사두수)||0).toLocaleString('ko-KR')}두</td>
                   <td style="text-align:right;color:var(--accent);">${(Number(g.판매두수)||0).toLocaleString('ko-KR')}두</td>
-                  <td style="text-align:right;">${gr===null?'-':gr.toFixed(1)+'%'}</td>
+                  <td style="text-align:right;${survivalRateStyle(gr)}">${gr===null?'-':gr.toFixed(1)+'%'}</td>
                   <td style="text-align:right;">${(Number(g.현재고)||0).toLocaleString('ko-KR')}두</td>
                 </tr>`;
               }).join('')}
@@ -6088,13 +6178,13 @@ function renderBiyukFarmStatusBox(){
         </td>
       </tr>`;
     return `
-      <tr>
-        <td style="font-weight:600;"><a href="javascript:void(0)" onclick="toggleBiyukFarmStatus('${safeFarm}')" style="color:var(--accent);text-decoration:underline;">${escapeHtml(r.farm)}</a></td>
+      <tr onclick="toggleBiyukFarmStatus('${safeFarm}')" style="cursor:pointer;">
+        <td style="font-weight:700;color:var(--ink);">${escapeHtml(r.farm)}</td>
         <td>${escapeHtml(FARM_MANAGERS[r.farm]||'-')}</td>
         <td style="text-align:right;">${r.전입두수.toLocaleString('ko-KR')}두</td>
         <td style="text-align:right;">${r.폐사두수.toLocaleString('ko-KR')}두</td>
         <td style="text-align:right;color:var(--accent);">${r.판매두수.toLocaleString('ko-KR')}두</td>
-        <td style="text-align:right;">${r.육성율.toFixed(1)}%</td>
+        <td style="text-align:right;${survivalRateStyle(r.육성율)}">${r.육성율.toFixed(1)}%</td>
         <td style="text-align:right;">${r.현재고.toLocaleString('ko-KR')}두</td>
       </tr>${detailRow}`;
   }).join('');
