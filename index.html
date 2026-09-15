@@ -2194,12 +2194,14 @@ function medCycleRange(closingMonth){
 }
 
 // 지역부장별 약품비 사용금액을 재고두수/전입두수/출하두수 각 기준의 두당 금액으로 비교.
-// 농가명 -> 지역부장 매핑은 출하관리의 농가-지역부장 매핑(SHIPMENT_FARMMAP)을 그대로 사용해서
-// "지역부장별 월별/누적 실적" 등 다른 출하 화면과 같은 지역부장 기준으로 맞춘다.
+// 재고두수·전입두수·약품비(농가별)는 사육현황관리에서 실제로 채워서 쓰는 담당자 매핑(FARM_MANAGERS)을
+// 쓴다 — 출하관리의 농가-지역부장 매핑(SHIPMENT_FARMMAP)은 등록된 농가가 적어서(사육중인 35개 농가 중
+// 6개만 매핑) 대부분이 "미지정"으로 빠지는 문제가 있었다. 출하두수만은 출하실적 기록에 이미 각 건마다
+// 지역부장이 직접 찍혀 있으므로 그 값을 그대로 쓴다.
 function computeMedRegionUsage(month){
   const 사용금액 = {};
   MEDICINE.filter(r=>r.구분월===month && !isExcludedRow(r)).forEach(r=>{
-    const person = lookupFarmManager(r.농가명) || '미지정';
+    const person = FARM_MANAGERS[(r.농가명||'').trim()] || '미지정';
     사용금액[person] = (사용금액[person]||0) + (Number(r.납품금액)||0);
   });
 
@@ -2207,14 +2209,14 @@ function computeMedRegionUsage(month){
 
   const 재고두수 = {};
   REARING_GROUPS.filter(g=>g.상태==='사육중').forEach(g=>{
-    const person = lookupFarmManager(g.농장명) || '미지정';
+    const person = FARM_MANAGERS[(g.농장명||'').trim()] || '미지정';
     재고두수[person] = (재고두수[person]||0) + (Number(g.현재고)||0);
   });
 
   const 전입두수 = {};
   if(range){
     REARING_GROUPS.filter(g=>g.전입일 && g.전입일>=range.start && g.전입일<=range.end).forEach(g=>{
-      const person = lookupFarmManager(g.농장명) || '미지정';
+      const person = FARM_MANAGERS[(g.농장명||'').trim()] || '미지정';
       전입두수[person] = (전입두수[person]||0) + (Number(g.전입두수)||0);
     });
   }
