@@ -2171,14 +2171,18 @@ function computeMedicineBudgetTotals(month){
       const stock = computeMedWeekStockTotals(month);
       if(stock.totalLimit || stock.totalUsed) return { totalLimit: stock.totalLimit, totalUsed: stock.totalUsed, totalPct: stock.totalPct };
     }
+    // 그룹별 한도금액과는 별개로, 주차별 입식두수·약품비 한도에서 입력한 그 달 추가예산 합계를
+    // 전체 한도에 자동으로 더한다(어느 그룹 몫인지 알 수 없으므로 합산 총액에만 반영).
+    totalLimit += computeMedWeekStockTotals(month).totalExtra;
     return { totalLimit, totalUsed, totalPct: totalLimit ? Math.round(totalUsed/totalLimit*100) : 0 };
   }
   const all = MED_BUDGETS.filter(b=>b.구분월===month);
   if(all.length){
     const totalRow = all.find(g=>(g.그룹||'').includes('총계'));
     const groups = all.filter(g=>!(g.그룹||'').includes('총계'));
-    const totalLimit = totalRow ? (totalRow.한도금액||0) : groups.reduce((s,g)=>s+(g.한도금액||0),0);
+    let totalLimit = totalRow ? (totalRow.한도금액||0) : groups.reduce((s,g)=>s+(g.한도금액||0),0);
     const totalUsed = totalRow ? (totalRow.사용금액||0) : groups.reduce((s,g)=>s+(g.사용금액||0),0);
+    totalLimit += computeMedWeekStockTotals(month).totalExtra;
     return { totalLimit, totalUsed, totalPct: totalLimit ? Math.round(totalUsed/totalLimit*100) : 0 };
   }
   // 그룹도 안 만들고 한도 엑셀도 안 올렸으면, 주차별 입식두수·약품비 한도의 마감월 합산(입식두수×예산단가)을 대신 쓴다
@@ -2374,6 +2378,10 @@ function renderBudgetSection(){
         }
         totalLimit = stock.totalLimit; totalUsed = stock.totalUsed; totalHeads = stock.totalStock;
       }
+    } else {
+      // 그룹별 한도금액이 정상적으로 설정된 경우에도, 주차별 입식두수·약품비 한도에서 입력한 그 달
+      // 추가예산 합계는 전체 합계 한도에 자동으로 더한다(개별 그룹 카드는 그대로 두고 합산에만 반영).
+      totalLimit += computeMedWeekStockTotals(selectedBudgetMonth).totalExtra;
     }
     const totalRemain = totalLimit - totalUsed;
     const totalPct = totalLimit ? Math.round(totalUsed/totalLimit*100) : 0;
@@ -2435,10 +2443,13 @@ function renderBudgetSection(){
   const totalRow = all.find(g=>(g.그룹||'').includes('총계'));
   const groups = all.filter(g=>!(g.그룹||'').includes('총계'));
 
-  const totalLimit = totalRow ? (totalRow.한도금액||0) : groups.reduce((s,g)=>s+(g.한도금액||0),0);
+  let totalLimit = totalRow ? (totalRow.한도금액||0) : groups.reduce((s,g)=>s+(g.한도금액||0),0);
   const totalUsed = totalRow ? (totalRow.사용금액||0) : groups.reduce((s,g)=>s+(g.사용금액||0),0);
-  const totalRemain = totalRow ? (totalRow.잔여한도||0) : groups.reduce((s,g)=>s+(g.잔여한도||0),0);
   const totalHeads = groups.reduce((s,g)=>s+(g.전입두수||0),0);
+  // 주차별 입식두수·약품비 한도에서 입력한 그 달 추가예산 합계를 전체 합계 한도에 자동으로 더한다.
+  const weekExtra = computeMedWeekStockTotals(selectedBudgetMonth).totalExtra;
+  totalLimit += weekExtra;
+  const totalRemain = totalLimit - totalUsed;
   const totalPct = totalLimit ? Math.round(totalUsed/totalLimit*100) : 0;
   const totalLabel = totalRow ? totalRow.그룹 : '전체 합계';
 
