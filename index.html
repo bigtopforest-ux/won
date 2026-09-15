@@ -7953,7 +7953,6 @@ function renderRearingGroupsTable(){
   if(sortFieldEl) biyukSortField = sortFieldEl.value;
 
   let groups = REARING_GROUPS.filter(g=>{
-    if((g.돼지구분||'').trim()==='자돈') return false; // 자돈사는 별도 "후기 자돈 사육 현황" 섹션에서 표시
     if(status && g.상태 !== status) return false;
     if(q && !((g.농장명||'').toLowerCase().includes(q) || (g.그룹명||'').toLowerCase().includes(q))) return false;
     return true;
