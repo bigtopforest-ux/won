@@ -3506,6 +3506,66 @@ async function uploadShipmentAgeFile(){
   }
 }
 
+// ---- 출하일령 자동 매칭(사육현황그룹 전입일 기반) ----
+// 외부 "출하내역" 엑셀이 없어도, 등급판정서(출하실적) 농가명을 사육현황그룹의 농장명과 연결해
+// 전입일→출하일 사이 경과일수로 출하일령을 자동 계산한다. 등급판정서 농가명 표기가 사육현황그룹
+// 농장명과 다를 수 있어(예: "창신농장" vs "창신(자돈)"/"창신(비육)") resolveMedicineFarmManager와
+// 같은 3단계 방식(정확히 일치→"농장" 접미사 제거 후 일치→접두 포함관계가 하나뿐)으로 매칭하되,
+// 출하는 항상 비육 단계에서 나가므로 비육 그룹(자돈 제외)만 대상으로 한다.
+// 같은 농장에 배치(그룹)가 여러 건 있으면 어느 배치에서 출하됐는지 알 수 없으므로 매칭하지 않는다
+// (정확히 하나뿐일 때만 자동 반영 — 애매하면 미매칭으로 남겨 기존 "출하내역 엑셀 업로드"로 수동 보완).
+function resolveShipmentFarmToRearingFarm(rawFarm){
+  const raw = String(rawFarm||'').trim();
+  if(!raw) return null;
+  const known = uniqueSorted(REARING_GROUPS.filter(g=>(g.돼지구분||'').trim()!=='자돈').map(g=>(g.농장명||'').trim()).filter(Boolean));
+  if(known.includes(raw)) return raw;
+  const stripped = raw.replace(/농장$/, '');
+  if(known.includes(stripped)) return stripped;
+  const candidates = known.filter(k=> k.startsWith(stripped) || stripped.startsWith(k));
+  return candidates.length===1 ? candidates[0] : null;
+}
+
+function findUniqueRearingBatchForShipment(rawFarm){
+  const farm = resolveShipmentFarmToRearingFarm(rawFarm);
+  if(!farm) return null;
+  const batches = REARING_GROUPS.filter(g=> (g.농장명||'').trim()===farm && (g.돼지구분||'').trim()!=='자돈');
+  return batches.length===1 ? batches[0] : null;
+}
+
+function computeAutoShipmentAge(s){
+  const group = findUniqueRearingBatchForShipment(s.농가명);
+  if(!group || !group.전입일 || !s.도축일) return null;
+  const start = new Date(group.전입일+'T00:00:00');
+  const end = new Date(s.도축일+'T00:00:00');
+  if(isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+  const days = Math.round((end-start)/86400000);
+  if(days < 0) return null;
+  return { 일령: days, 그룹명: group.그룹명 };
+}
+
+// 이미 출하일령이 채워진 기록은 건드리지 않고, 자동 매칭되는 것만 저장한다.
+// farmFilter(Set)를 주면(사육현황그룹 업로드 직후처럼 "이번에 올라온 농장 + 출하내역 있는 것 위주로만")
+// 그 농장들에 해당하는 출하기록만 대상으로 훑는다.
+async function autoMatchShipmentAges(farmFilter){
+  const targets = SHIPMENTS.filter(s=>{
+    if(s.출하일령!==undefined && s.출하일령!==null && s.출하일령!=='') return false;
+    if(!farmFilter) return true;
+    const rearingFarm = resolveShipmentFarmToRearingFarm(s.농가명);
+    return rearingFarm && farmFilter.has(rearingFarm);
+  });
+  let matched = 0;
+  for(const s of targets){
+    const age = computeAutoShipmentAge(s);
+    if(!age) continue;
+    const record = { ...s, 출하일령: age.일령, 출하일령상세: [{ 그룹명: age.그룹명, 두수: s.두수, 일령: age.일령 }] };
+    const saved = await shipmentApiRequest({ action:'upsert', record });
+    const idx = SHIPMENTS.findIndex(x=>x.id===s.id);
+    if(idx>-1) SHIPMENTS[idx] = saved;
+    matched++;
+  }
+  return matched;
+}
+
 let pendingShipmentDuplicateId = null;
 
 async function prepareShipmentUpload(){
@@ -3651,10 +3711,22 @@ async function confirmShipmentSave(){
       const existing = SHIPMENTS.find(s=>s.id===pendingShipmentDuplicateId);
       if(existing) Object.assign(parsed, mergeShipmentInto(existing, parsed));
     }
-    const saved = await shipmentApiRequest({ action:'upsert', record: parsed, editor: pendingShipmentEditor });
+    let saved = await shipmentApiRequest({ action:'upsert', record: parsed, editor: pendingShipmentEditor });
     const idx = SHIPMENTS.findIndex(s=>s.id===saved.id);
     if(idx>-1) SHIPMENTS[idx] = saved; else SHIPMENTS.push(saved);
-    statusEl.textContent = `완료: ${parsed.농가명} (${parsed.도축일}) ${parsed.두수}두 반영됨 (지역부장: ${chosen})`;
+    // 사육현황그룹에 매칭되는 배치가 하나뿐이면 출하일령을 자동 반영(위주로만 — 매칭 안 되면 미반영 유지)
+    let ageNote = '';
+    if(saved.출하일령===undefined || saved.출하일령===null || saved.출하일령===''){
+      const age = computeAutoShipmentAge(saved);
+      if(age){
+        const withAge = { ...saved, 출하일령: age.일령, 출하일령상세: [{ 그룹명: age.그룹명, 두수: saved.두수, 일령: age.일령 }] };
+        saved = await shipmentApiRequest({ action:'upsert', record: withAge });
+        const idx2 = SHIPMENTS.findIndex(s=>s.id===saved.id);
+        if(idx2>-1) SHIPMENTS[idx2] = saved;
+        ageNote = ` · 출하일령 ${age.일령}일 자동 반영`;
+      }
+    }
+    statusEl.textContent = `완료: ${parsed.농가명} (${parsed.도축일}) ${parsed.두수}두 반영됨 (지역부장: ${chosen})${ageNote}`;
     document.getElementById('shipment-excel-file').value = '';
     document.getElementById('shipment-confirm-box').innerHTML = '';
     pendingShipmentRecord = null;
@@ -5831,6 +5903,15 @@ async function uploadRearingGroups(){
     statusEl.textContent = `완료: 신규 ${result.added}건, 갱신 ${result.updated}건 (전체 ${result.total}건)`;
     await loadRearingFromAPI();
     renderRearingAll();
+    // 이번에 올라온 농장 중 출하내역(등급판정서)이 이미 있는 것 위주로만 출하일령 소급 자동 매칭
+    const uploadedFarms = new Set(rows.map(r=>(r.농장명||'').trim()).filter(Boolean));
+    if(uploadedFarms.size){
+      const ageMatched = await autoMatchShipmentAges(uploadedFarms);
+      if(ageMatched){
+        statusEl.textContent += ` · 출하일령 자동매칭 ${ageMatched}건`;
+        renderShipmentAll();
+      }
+    }
   }catch(e){
     statusEl.textContent = '오류: ' + e.message;
   }
