@@ -6338,7 +6338,7 @@ function rearingBucketTableHtml(events, totalStock, containerId){
     const detailHtml = `<tr><td colspan="3" style="padding:0;background:#faf9f6;">
       <div class="table-wrap" style="margin:6px 10px;">
         <table style="width:100%;font-size:12.5px;">
-          <thead><tr><th>농장</th><th>전입일</th><th>배치</th><th>폐사두수</th><th>사유</th><th style="min-width:220px;">조치사항</th><th>비고</th><th></th></tr></thead>
+          <thead><tr><th>농장</th><th>전입일</th><th>폐사두수</th><th>사유</th><th style="min-width:320px;">조치사항</th><th>비고</th><th></th></tr></thead>
           <tbody>
             ${detailRows.map(d=>{
               const fgKey = d.농장명+'|'+d.그룹명;
@@ -6346,17 +6346,17 @@ function rearingBucketTableHtml(events, totalStock, containerId){
               const editing = rearingBucketEditingKey === fgKey;
               if(editing){
                 return `<tr onclick="event.stopPropagation()">
-                  <td>${escapeHtml(d.농장명)}</td><td>${d.전입일||'-'}</td><td>${escapeHtml(d.그룹명)}</td><td>${d.폐사두수}</td>
+                  <td>${escapeHtml(d.농장명)}</td><td>${d.전입일||'-'}</td><td>${d.폐사두수}</td>
                   <td><input id="rbr-사유-${domKey}" value="${escapeHtml(d.사유||'')}" placeholder="폐사사유" style="width:100px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 5px;font-size:12px;"></td>
-                  <td><textarea id="rbr-조치사항-${domKey}" placeholder="조치사항 (예: 환기 개선, 사료 급이량 조정, 수의사 진료 등)" rows="2" style="width:260px;border:1px solid #e2e8e4;border-radius:6px;padding:5px 7px;font-size:12px;font-family:inherit;resize:vertical;">${escapeHtml(d.조치사항||'')}</textarea></td>
+                  <td><textarea id="rbr-조치사항-${domKey}" placeholder="조치사항 (예: 환기 개선, 사료 급이량 조정, 수의사 진료 등)" rows="3" style="width:100%;min-width:320px;border:1px solid #e2e8e4;border-radius:6px;padding:5px 7px;font-size:12px;font-family:inherit;resize:vertical;">${escapeHtml(d.조치사항||'')}</textarea></td>
                   <td><input id="rbr-비고-${domKey}" value="${escapeHtml(d.비고||'')}" placeholder="비고" style="width:100px;border:1px solid #e2e8e4;border-radius:6px;padding:3px 5px;font-size:12px;"></td>
                   <td><button class="tab-btn active" style="padding:2px 8px;font-size:11px;" onclick="saveRearingReason('${containerId}','${fgKey.replace(/'/g,"\\'")}',${JSON.stringify(d.ids)})">저장</button></td>
                 </tr>`;
               }
               return `<tr onclick="event.stopPropagation(); startEditRearingReason('${containerId}','${fgKey.replace(/'/g,"\\'")}')" style="cursor:pointer;">
-                <td>${escapeHtml(d.농장명)}</td><td>${d.전입일||'-'}</td><td>${escapeHtml(d.그룹명)}</td><td>${d.폐사두수}</td>
+                <td>${escapeHtml(d.농장명)}</td><td>${d.전입일||'-'}</td><td>${d.폐사두수}</td>
                 <td>${d.사유?escapeHtml(d.사유):'<span style="color:var(--muted);">입력하기</span>'}</td>
-                <td style="white-space:normal;min-width:220px;">${d.조치사항?escapeHtml(d.조치사항):'<span style="color:var(--muted);">-</span>'}</td>
+                <td style="white-space:normal;min-width:320px;">${d.조치사항?escapeHtml(d.조치사항):'<span style="color:var(--muted);">-</span>'}</td>
                 <td>${escapeHtml(d.비고)||'-'}</td><td></td>
               </tr>`;
             }).join('')}
