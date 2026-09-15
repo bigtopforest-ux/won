@@ -582,7 +582,8 @@
     <select id="shipCompanyMonthSelect" onchange="renderShipmentCompanyCharts()"><option value="">전체기간</option></select>
   </div>
   <div class="charts">
-    <div class="chart-card"><h3 id="chartShipCompanyPieTitle">업체별 출하 비율 (전체기간)</h3><canvas id="chartShipCompanyPie"></canvas></div>
+    <div class="chart-card"><h3 id="chartShipVendorPieTitle">업체별 출하 비율 (전체기간)</h3><canvas id="chartShipVendorPie"></canvas></div>
+    <div class="chart-card"><h3 id="chartShipCompanyPieTitle">도축장별 출하 비율 (전체기간)</h3><canvas id="chartShipCompanyPie"></canvas></div>
     <div class="chart-card"><h3 id="chartShipDowStackTitle">요일별 업체 분포 (전체기간)</h3><canvas id="chartShipDowStack"></canvas></div>
   </div>
 
@@ -4145,6 +4146,24 @@ const SHIP_COMPANY_LIST = ['약감포크','동아미트','이서푸드','영천'
 const SHIP_COMPANY_FIELD_KEY = {약감포크:'yakgam', 동아미트:'donga', 이서푸드:'iseo', 영천:'yeongcheon', 신선:'sinseon', 기타:'gita'};
 const SHIP_COMPANY_COLORS = {약감포크:'#C8102E', 동아미트:'#4A7FA8', 이서푸드:'#D97B0A', 영천:'#4C7A2E', 신선:'#8B5A8F', 기타:'#A69B8D'};
 
+// "업체별 출하비율" 차트 전용 — 영천은 "신선(영천)", 신선은 "신선(일반)"으로 구분해서 보여줌(SHIP_COMPANY_LIST 등
+// 다른 계획/지급율 계산 로직은 그대로 '영천'/'신선'을 쓰고, 이 차트 표시에서만 라벨을 바꿔 씀)
+const VENDOR_PIE_LABELS = {약감포크:'약감포크', 동아미트:'동아미트', 이서푸드:'이서푸드', 영천:'신선(영천)', 신선:'신선(일반)'};
+const VENDOR_PIE_COLORS = {
+  약감포크: SHIP_COMPANY_COLORS.약감포크, 동아미트: SHIP_COMPANY_COLORS.동아미트, 이서푸드: SHIP_COMPANY_COLORS.이서푸드,
+  '신선(영천)': SHIP_COMPANY_COLORS.영천, '신선(일반)': SHIP_COMPANY_COLORS.신선, 기타: SHIP_COMPANY_COLORS.기타,
+};
+function vendorPieLabel(s){
+  const c = normalizeCompany(shipmentCompanyRaw(s));
+  return VENDOR_PIE_LABELS[c] || '기타';
+}
+
+// "도축장별 출하비율" 차트 전용 — 표준화하지 않고 거래처(도축장)에 찍힌 이름 그대로 그룹핑
+function plantNameOf(s){
+  return (s && s.거래처 && s.거래처.trim()) || '(미입력)';
+}
+const GENERIC_PIE_PALETTE = ['#C8102E','#4A7FA8','#D97B0A','#4C7A2E','#8B5A8F','#A69B8D','#2E86AB','#E9724C','#54494B','#218380'];
+
 function computeCompanyBreakdown(list){
   const out = {}; [...SHIP_COMPANY_LIST,'기타'].forEach(c=>out[c]=0);
   list.forEach(s=>{
@@ -4872,20 +4891,34 @@ function renderShipmentCompanyCharts(){
   const scoped = selectedMonth ? SHIPMENTS.filter(s=>(s.도축일||'').slice(0,7)===selectedMonth) : SHIPMENTS;
   const periodLabel = selectedMonth || '전체기간';
 
-  const pieTitle = document.getElementById('chartShipCompanyPieTitle');
+  const vendorTitle = document.getElementById('chartShipVendorPieTitle');
+  const plantTitle = document.getElementById('chartShipCompanyPieTitle');
   const dowTitle = document.getElementById('chartShipDowStackTitle');
-  if(pieTitle) pieTitle.textContent = `업체별 출하 비율 (${periodLabel})`;
+  if(vendorTitle) vendorTitle.textContent = `업체별 출하 비율 (${periodLabel})`;
+  if(plantTitle) plantTitle.textContent = `도축장별 출하 비율 (${periodLabel})`;
   if(dowTitle) dowTitle.textContent = `요일별 업체 분포 (${periodLabel})`;
 
-  const companyTotals = {};
+  // 업체별(육가공업체 기준) 출하비율 — 영천은 "신선(영천)", 신선은 "신선(일반)"으로 구분 표시
+  const vendorTotals = {};
   scoped.forEach(s=>{
-    const c = normalizeCompany(shipmentCompanyRaw(s));
-    companyTotals[c] = (companyTotals[c]||0) + (Number(s.두수)||0);
+    const label = vendorPieLabel(s);
+    vendorTotals[label] = (vendorTotals[label]||0) + (Number(s.두수)||0);
+  });
+  shipCharts.vendorPie = new Chart(document.getElementById('chartShipVendorPie'), {
+    type:'pie',
+    data:{ labels:Object.keys(vendorTotals), datasets:[{data:Object.values(vendorTotals), backgroundColor:Object.keys(vendorTotals).map(l=>VENDOR_PIE_COLORS[l]||'#A69B8D')}] },
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
   });
 
+  // 도축장별(작업장명 원문) 출하비율
+  const plantTotals = {};
+  scoped.forEach(s=>{
+    const p = plantNameOf(s);
+    plantTotals[p] = (plantTotals[p]||0) + (Number(s.두수)||0);
+  });
   shipCharts.pie = new Chart(document.getElementById('chartShipCompanyPie'), {
     type:'pie',
-    data:{ labels:Object.keys(companyTotals), datasets:[{data:Object.values(companyTotals), backgroundColor:Object.keys(companyTotals).map(c=>SHIP_COMPANY_COLORS[c]||'#A69B8D')}] },
+    data:{ labels:Object.keys(plantTotals), datasets:[{data:Object.values(plantTotals), backgroundColor:Object.keys(plantTotals).map((_,i)=>GENERIC_PIE_PALETTE[i%GENERIC_PIE_PALETTE.length])}] },
     options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}}
   });
 
