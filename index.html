@@ -6058,7 +6058,7 @@ function computePigletIntakeReportRows(){
     return {
       motherFarm: pigletReportMotherFarmOf(g.자돈농장명),
       bucket: pigletReportBucketOf(g.자돈농장명),
-      farm: g.농장명||'-', group: g.그룹명, pen: g.저장위치||'-',
+      farm: g.농장명||'-', group: g.그룹명, manager: FARM_MANAGERS[(g.농장명||'').trim()]||'-',
       전입일: g.전입일||'-', 전입두수: Number(g.전입두수)||0, 전입일령: g.전입일령||'-',
       전입체중, lowWeight: 전입체중!==null && 전입체중<PIGLET_REPORT_LOW_WEIGHT,
       전입시상태: g.전입시상태||'', 질병사항: g.질병사항||'', 조치사항: g.조치사항||'',
@@ -6176,7 +6176,7 @@ function renderPigletIntakeReportBox(){
     return;
   }
 
-  const headCells = ['No','모돈장','자돈장','비육장','돈사','전입일','전입두수','전입일령','전입체중(kg)','전입시 상태','질병사항','조치사항/특이사항','폐사두수','현재고','육성률'];
+  const headCells = ['No','모돈장','자돈장','비육장','담당자','전입일','전입두수','전입일령','전입체중(kg)','전입시 상태','질병사항','조치사항/특이사항','폐사두수','현재고','육성률'];
   let bodyHtml = '';
   let no = 0;
   let i = 0;
@@ -6198,7 +6198,7 @@ function renderPigletIntakeReportBox(){
         <td>${escapeHtml(mf)}</td>
         <td>${escapeHtml(row.bucket)}</td>
         <td>${escapeHtml(row.farm)}</td>
-        <td style="text-align:center;">${escapeHtml(row.pen)}</td>
+        <td style="text-align:center;">${escapeHtml(row.manager)}</td>
         <td style="text-align:center;">${row.전입일}</td>
         <td style="text-align:right;">${row.전입두수.toLocaleString('ko-KR')}</td>
         <td style="text-align:center;">${row.전입일령}</td>
@@ -6255,7 +6255,7 @@ function renderPigletIntakeReportBox(){
 function buildPigletIntakeReportWorkbook(XS, rangeLabel, rows){
   const ws = {};
   const merges = [];
-  const headers = ['No','모돈장','자돈장','비육장','돈사','전입일','전입두수','전입일령','전입체중(kg)','전입시 상태','질병사항','조치사항/특이사항','폐사두수','현재고','육성률'];
+  const headers = ['No','모돈장','자돈장','비육장','담당자','전입일','전입두수','전입일령','전입체중(kg)','전입시 상태','질병사항','조치사항/특이사항','폐사두수','현재고','육성률'];
   const NCOLS = headers.length;
   let r = 0;
 
@@ -6304,7 +6304,7 @@ function buildPigletIntakeReportWorkbook(XS, rangeLabel, rows){
       const baseFill = { fgColor:{rgb: alt?REPORT_XLSX_COLORS.altRow:'FFFFFF'} };
       const grText = row.육성률===null ? '-' : Number(row.육성률.toFixed(1));
       const cells = [
-        no, mf, row.bucket, row.farm, row.pen, row.전입일, row.전입두수, row.전입일령,
+        no, mf, row.bucket, row.farm, row.manager, row.전입일, row.전입두수, row.전입일령,
         row.전입체중===null?'-':row.전입체중, row.전입시상태||'-', row.질병사항||'-', row.조치사항||'-',
         row.폐사두수, row.현재고, grText,
       ];
@@ -6349,7 +6349,7 @@ function buildPigletIntakeReportWorkbook(XS, rangeLabel, rows){
 
   ws['!ref'] = XS.utils.encode_range({s:{r:0,c:0}, e:{r:r, c:NCOLS-1}});
   ws['!merges'] = merges;
-  ws['!cols'] = [{wch:5},{wch:12},{wch:10},{wch:14},{wch:8},{wch:12},{wch:9},{wch:9},{wch:11},{wch:22},{wch:22},{wch:30},{wch:9},{wch:9},{wch:9}];
+  ws['!cols'] = [{wch:5},{wch:12},{wch:10},{wch:14},{wch:10},{wch:12},{wch:9},{wch:9},{wch:11},{wch:22},{wch:22},{wch:30},{wch:9},{wch:9},{wch:9}];
   return ws;
 }
 
