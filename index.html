@@ -208,6 +208,7 @@
   .record-card .rc-field .rc-label{font-size:10.5px;color:var(--muted);margin-top:1px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .record-list-head.rc-cols-7, .record-card.rc-cols-7{grid-template-columns:repeat(7,minmax(0,1fr));}
   .record-list-head.rc-cols-11, .record-card.rc-cols-11{grid-template-columns:repeat(11,minmax(60px,1fr));}
+  .record-list-head.rc-cols-12, .record-card.rc-cols-12{grid-template-columns:repeat(12,minmax(60px,1fr));}
   @media (max-width:900px){ .record-list-head{display:none;} }
   @media (max-width:640px){ .view-nav{padding:0 12px;} }
 
@@ -3818,16 +3819,17 @@ function renderShipmentTable(){
       cardsBox.innerHTML = '<p class="upload-status">표시할 출하기록이 없습니다.</p>';
       if(cardsHead) cardsHead.innerHTML = '';
     } else {
-      if(cardsHead) cardsHead.innerHTML = `<div class="record-list-head rc-cols-11"><span>출하일</span><span>농가명</span><span>거래처</span><span>지역부장</span><span>두수</span><span>총생체중</span><span>출하평체</span><span>지급율</span><span>지육율</span><span>등급율</span><span>등급(1+/1/2/등외)</span></div>`;
+      if(cardsHead) cardsHead.innerHTML = `<div class="record-list-head rc-cols-12"><span>출하일</span><span>농가명</span><span>육가공업체</span><span>도축장</span><span>지역부장</span><span>두수</span><span>총생체중</span><span>출하평체</span><span>지급율</span><span>지육율</span><span>등급율</span><span>등급(1+/1/2/등외)</span></div>`;
       cardsBox.innerHTML = shown.map(s=>{
         const g = s.등급분포 || {};
         const 출하평체 = (function(){ const 두수=Number(s.두수)||0; return 두수 ? ((Number(s.총생체중)||0)/두수).toFixed(1)+'kg' : '-'; })();
         const 지급율 = (function(){ const r=computeExpectedPayRate(s); return r===null?'미정':r.toFixed(1)+'%'; })();
         const 등급율 = (function(){ const r=computeGradeRate(s); return r===null?'미정':r.toFixed(1)+'%'; })();
-        return `<div class="record-card rc-cols-11" onclick="openShipmentEditModal(${s.id})">
+        return `<div class="record-card rc-cols-12" onclick="openShipmentEditModal(${s.id})">
           <div class="rc-field"><b>${s.도축일||'-'}</b><span class="rc-label">${dayOfWeekKr(s.도축일)}요일</span></div>
           <div class="rc-field"><b>${s.농가명||'-'}</b><span class="rc-label">농가명</span></div>
-          <div class="rc-field"><b>${shipmentCompanyRaw(s)||'-'}</b><span class="rc-label">거래처</span></div>
+          <div class="rc-field"><b>${s.육가공업체||'-'}</b><span class="rc-label">육가공업체</span></div>
+          <div class="rc-field"><b>${s.거래처||'-'}</b><span class="rc-label">도축장</span></div>
           <div class="rc-field"><b>${s.지역부장||'-'}</b><span class="rc-label">지역부장</span></div>
           <div class="rc-field"><b>${(Number(s.두수)||0).toLocaleString('ko-KR')}</b><span class="rc-label">두수</span></div>
           <div class="rc-field"><b>${(s.총생체중||0).toLocaleString('ko-KR')}kg</b><span class="rc-label">총생체중</span></div>
