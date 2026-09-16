@@ -6686,14 +6686,13 @@ function computeBiyukFarmStatusRows(){
     const farm = (g.농장명||'').trim() || '(농장명 없음)';
     (byFarm[farm] = byFarm[farm] || []).push(g);
   });
-  const 구분순서 = {비육:0, 혼합:1, 자돈:2};
+  const 구분순서 = {비육:0, 자돈:1};
   return Object.keys(byFarm).map(farm=>{
     const farmGroups = byFarm[farm];
-    // 대부분은 "창신(비육)"/"창신(자돈)"처럼 농장명 자체가 나뉘어 있어 한 농장에 한 구분만 있지만,
-    // 드물게 한 농장 안에 비육·자돈 그룹이 섞여 있는 경우(예: 혜정(권종한))도 있어 "혼합"으로 따로 표시한다.
-    const hasJadon = farmGroups.some(g=>(g.돼지구분||'').trim()==='자돈');
-    const hasBiyuk = farmGroups.some(g=>(g.돼지구분||'').trim()!=='자돈');
-    const 구분 = hasJadon && hasBiyuk ? '혼합' : (hasJadon ? '자돈' : '비육');
+    // 자돈은 출하가 없어 이 화면에서는 실제로 자돈만 사육하는 농장(창신(자돈)) 하나만 구분해서 보여주면
+    // 되고, 나머지는 그룹별 돼지구분 값이 잘못 찍혀 있거나 확정 안 된 경우가 있어도 전부 비육 농장으로
+    // 계산한다(농장명 기준으로만 판단 — 그룹 단위 돼지구분 값은 더 이상 이 화면 분류에 쓰지 않는다).
+    const 구분 = farm==='창신(자돈)' ? '자돈' : '비육';
     const 전입두수 = farmGroups.reduce((s,g)=>s+(Number(g.전입두수)||0),0);
     const 폐사두수 = farmGroups.reduce((s,g)=>s+(Number(g.폐사두수)||0),0);
     const 판매두수 = farmGroups.reduce((s,g)=>s+(Number(g.판매두수)||0),0);
@@ -6751,18 +6750,15 @@ function buildBiyukFarmRowsHtml(rows){
   return rows.map(r=>{
     const expanded = biyukFarmStatusExpanded.has(r.farm);
     const safeFarm = r.farm.replace(/'/g,"\\'");
-    const isMixed = r.구분==='혼합';
     const detailRow = !expanded ? '' : `
       <tr>
         <td colspan="7" style="padding:10px 10px 12px 20px;background:var(--bg);">
           <div class="table-wrap" style="margin:0;"><table style="border:1px solid var(--border);">
-            <thead><tr>${isMixed?'<th>구분</th>':''}<th>그룹명</th><th>전입일</th><th style="text-align:right;">전입두수</th><th style="text-align:right;">폐사두수</th><th style="text-align:right;">출하두수</th><th style="text-align:right;">육성율</th><th style="text-align:right;">현재고</th></tr></thead>
+            <thead><tr><th>그룹명</th><th>전입일</th><th style="text-align:right;">전입두수</th><th style="text-align:right;">폐사두수</th><th style="text-align:right;">출하두수</th><th style="text-align:right;">육성율</th><th style="text-align:right;">현재고</th></tr></thead>
             <tbody>
               ${r.groups.slice().sort((a,b)=>(a.전입일||'').localeCompare(b.전입일||'')).map(g=>{
                 const gr = getRearingSurvivalRate(g);
-                const isJadonGroup = (g.돼지구분||'').trim()==='자돈';
                 return `<tr>
-                  ${isMixed?`<td>${isJadonGroup?'<span style="color:var(--info);font-weight:700;">자돈</span>':'<span style="color:var(--accent);font-weight:700;">비육</span>'}</td>`:''}
                   <td>${g.그룹명||'-'}</td>
                   <td style="color:var(--muted);">${g.전입일||'-'}</td>
                   <td style="text-align:right;">${(Number(g.전입두수)||0).toLocaleString('ko-KR')}두</td>
@@ -6778,7 +6774,7 @@ function buildBiyukFarmRowsHtml(rows){
       </tr>`;
     return `
       <tr onclick="toggleBiyukFarmStatus('${safeFarm}')" style="cursor:pointer;">
-        <td>${r.구분==='자돈' ? '<span style="color:var(--info);font-weight:700;">자돈</span>' : (r.구분==='혼합' ? '<span style="color:var(--warn);font-weight:700;">혼합</span>' : '<span style="color:var(--accent);font-weight:700;">비육</span>')}</td>
+        <td>${r.구분==='자돈' ? '<span style="color:var(--info);font-weight:700;">자돈</span>' : '<span style="color:var(--accent);font-weight:700;">비육</span>'}</td>
         <td style="font-weight:700;color:var(--ink);">${escapeHtml(r.farm)}</td>
         <td style="text-align:right;">${r.전입두수.toLocaleString('ko-KR')}두</td>
         <td style="text-align:right;">${r.폐사두수.toLocaleString('ko-KR')}두</td>
@@ -6807,11 +6803,10 @@ function renderBiyukFarmStatusBox(){
     const 육성율 = 전입두수 ? ((현재고+판매두수)/전입두수*100) : 0;
     return { 전입두수, 폐사두수, 판매두수, 현재고, 육성율 };
   }
-  // 합계는 농장 단위 "구분"이 아니라 그룹(배치) 단위 돼지구분으로 계산한다. 혜정(권종한)처럼
-  // 한 농장 안에 비육·자돈 그룹이 섞여 있어도(=농장행은 "혼합") 합계는 항상 정확하게 맞도록 하기 위함.
+  // 합계도 농장별 구분(창신(자돈)만 자돈, 나머지는 전부 비육)과 일치하도록 농장 단위로 나눠서 낸다.
   const allGroups = farmRows.flatMap(r=>r.groups);
-  const biyukGroups = allGroups.filter(g=>(g.돼지구분||'').trim()!=='자돈');
-  const jadonGroups = allGroups.filter(g=>(g.돼지구분||'').trim()==='자돈');
+  const biyukGroups = farmRows.filter(r=>r.구분!=='자돈').flatMap(r=>r.groups);
+  const jadonGroups = farmRows.filter(r=>r.구분==='자돈').flatMap(r=>r.groups);
   const totalBiyuk = sumGroups(biyukGroups);
   const totalJadon = sumGroups(jadonGroups);
   const totalAll = sumGroups(allGroups);
