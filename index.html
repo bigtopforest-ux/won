@@ -7077,13 +7077,20 @@ function stripFarmPrefixLoop(name, farm){
   }
   return n;
 }
+// 버그: 반복 스트립 후 농장명을 다시 붙이지 않으면 "그레-그레-2026-005"처럼 그룹명 안쪽 반복
+// 세그먼트가 농장명과 똑같은 경우 두 번 다 벗겨져서 키가 "2026-005"처럼 농장 구분 없는 값으로
+// 수렴해버린다 — 그러면 같은 번호("005")를 쓰는 다른 농장의 폐사내역과 서로 뒤섞여 매칭된다
+// (실제 운영 데이터에서 그레/광영/넘버원 등 여러 농장이 이렇게 서로 폐사두수를 뒤바꿔 매칭되고
+// 있었음). 그래서 완전히 벗겨낸 뒤 농장명을 다시 한 번 앞에 붙여 농장별로 키가 갈리게 한다.
 function groupMatchKeyFromRearingGroup(g){
+  const farm = (g && g.농장명 || '').trim();
   const name = (g && g.그룹명 || '').trim().replace(/\(\d+\)\s*$/, ''); // 끝의 (차수) 제거
-  return normalizeGroupNameKey(stripFarmPrefixLoop(name, g && g.농장명));
+  return normalizeGroupNameKey(farm + '-' + stripFarmPrefixLoop(name, farm));
 }
 function groupMatchKeyFromMortality(m){
+  const farm = (m && m.농장명 || '').trim();
   const name = (m && m.그룹명 || '').trim();
-  return normalizeGroupNameKey(stripFarmPrefixLoop(name, m && m.농장명));
+  return normalizeGroupNameKey(farm + '-' + stripFarmPrefixLoop(name, farm));
 }
 
 function computeEarly30Count(group){
