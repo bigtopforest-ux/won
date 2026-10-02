@@ -825,7 +825,7 @@
       <strong><svg class="upload-icon" viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13.2V4M6.3 7.6 10 4l3.7 3.6"/><path d="M4 14.6v1.1c0 .7.6 1.3 1.3 1.3h9.4c.7 0 1.3-.6 1.3-1.3v-1.1"/></svg> 폐사내역 엑셀 업로드 (그룹명·일령 포함 양식)</strong>
       <button type="button" class="upload-info-btn" onclick="toggleUploadInfo(this)">?</button>
     </div>
-    <div class="upload-info-panel">해당 기간에 발생한 폐사 건만 담긴 파일을 그대로 올려주세요. 이미 등록된 건(플랜트·그룹명·날짜·두수·원인 동일)은 중복 집계되지 않습니다. 파일을 이 박스로 끌어다 놓아도 됩니다.</div>
+    <div class="upload-info-panel">이 파일을 올리면 기존에 저장된 폐사 기록을 전부 지우고 이 파일 내용으로 전체 교체합니다(병합/누적되지 않음). 같은 건이 날짜 보정 등으로 다시 집계되는 걸 막기 위함이니, 반드시 그 시점까지의 폐사 이력 전체가 들어있는 파일을 올려주세요. 파일을 이 박스로 끌어다 놓아도 됩니다.</div>
     <div class="upload-box-row">
       <input type="file" id="rearing-mortality-file" accept=".xlsx,.xls">
       <input type="text" id="rearing-mortality-editor" placeholder="등록자 이름" style="border:1px solid #e2e8e4;border-radius:8px;padding:8px 10px;font-size:13px;width:120px;">
@@ -5946,12 +5946,13 @@ async function uploadRearingMortality(){
   const statusEl = document.getElementById('rearing-mortality-status');
   const editor = document.getElementById('rearing-mortality-editor').value.trim();
   if(!fileInput.files.length){ statusEl.textContent = '파일을 선택해주세요'; return; }
+  if(!confirm('이 파일을 올리면 기존에 저장된 폐사 기록을 전부 지우고 이 파일 내용으로 전체 교체합니다.\n(같은 건이 날짜 보정 등으로 중복 집계되는 것을 막기 위함 — 업로드하는 파일에 그 시점까지의 폐사 이력 전체가 들어있어야 합니다)\n계속할까요?')) return;
   statusEl.textContent = '읽는 중...';
   try{
     const rows = await parseRearingMortalityFile(fileInput.files[0]);
     if(!rows.length){ statusEl.textContent = '유효한 데이터 행이 없습니다 (폐사발생일/그룹명 확인)'; return; }
     const result = await rearingApiRequest({ action:'uploadMortality', rows, editor });
-    statusEl.textContent = `완료: 신규 ${result.added}건, 중복제외 ${result.skipped}건 (전체 ${result.total}건)`;
+    statusEl.textContent = `완료: 전체 ${result.total}건으로 교체됨`;
     await loadRearingFromAPI();
     renderRearingAll();
   }catch(e){

@@ -552,34 +552,27 @@ export default async (req, context) => {
 
     if (action === "uploadMortality") {
       const rows = Array.isArray(body.rows) ? body.rows : [];
-      const existing = await loadMortality(s);
-      // 같은 업로드 파일 "안"의 행끼리는 서로 비교하지 않는다 (같은 그룹·날짜·두수·원인이어도
-      // 서로 다른 실제 폐사 건일 수 있음). 오직 "이전에 이미 저장된" 기록과만 비교해서
-      // 같은 파일을 통째로 재업로드했을 때만 중복으로 걸러낸다.
-      const existingKeys = new Set(existing.map(mortalityKey));
-      let added = 0, skipped = 0;
+      // 외부 시스템이 매번 "그 시점까지의 폐사 이력 전체"를 다시 내보내는데, 같은 건이라도
+      // 날짜가 보정되는 등 표기가 조금씩 바뀔 수 있어 기존 건과 새 건을 같은 건으로 매칭시키는
+      // 것 자체가 불가능하다(매칭 기준을 뭘로 잡든 날짜가 바뀌면 다른 키로 보여 중복 집계됨).
+      // 그래서 이전처럼 기존 기록에 병합하지 않고, 업로드할 때마다 새로 올린 파일 내용으로
+      // 전체를 교체한다 — 올라온 파일이 그 시점의 완전한 폐사 이력이라고 보는 것.
+      let nextId = 1;
       const newOnes = [];
       for (const row of rows) {
         if (!row.폐사발생일 || !row.그룹명) continue;
         const clean = {};
         MORTALITY_FIELDS.forEach((f) => { clean[f] = row[f] !== undefined ? row[f] : ""; });
         clean.개월령 = monthBucket(clean.사망일령);
-        const key = mortalityKey(clean);
-        if (existingKeys.has(key)) { skipped++; continue; }
-
         newOnes.push({
           ...clean,
-          id: 0,
+          id: nextId++,
           업로드자: editor || "",
           업로드시각: now,
         });
-        added++;
       }
-      let nextId = existing.length ? Math.max(...existing.map((r) => r.id || 0)) + 1 : 1;
-      newOnes.forEach((r) => { r.id = nextId++; });
-      const merged = [...existing, ...newOnes];
-      await s.setJSON(MORTALITY_KEY, merged);
-      return json({ ok: true, added, skipped, total: merged.length });
+      await s.setJSON(MORTALITY_KEY, newOnes);
+      return json({ ok: true, added: newOnes.length, replaced: true, total: newOnes.length });
     }
 
     if (action === "setMortalityReason") {
