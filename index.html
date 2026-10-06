@@ -6247,19 +6247,25 @@ function pigletReportMotherFarmOf(sourceText){
 const PIGLET_REPORT_MOTHER_ORDER = ['새빛농장', '하이팜', '포크랜드', '해오름', '천하25', '기타'];
 const PIGLET_REPORT_LOW_WEIGHT = 26; // 전입체중이 이 값(kg) 미만이면 저체중으로 강조 표시
 
+// 신규 "그룹보고서 전입현황" 서식으로 올린 그룹은 자돈농장명이 비어 있고, 자돈장 정보가 분양농장(번식농장명)에
+// 들어온다(예: "인티-신한양(서원규)", "돈앤돈25", "오케이25"). 그래서 자돈농장명이 없으면 번식농장명으로 판단한다.
+function pigletReportSourceOf(g){
+  return String(g.자돈농장명||'').trim() || String(g.번식농장명||'').trim();
+}
+
 function computePigletIntakeReportRows(){
   const { start, end } = pigletMortalityIntakeWindow();
   const groups = REARING_GROUPS.filter(g=>{
     if((g.돼지구분||'').trim()==='자돈') return false;
     if(g.상태!=='사육중') return false;
     if(!g.전입일 || g.전입일<start || g.전입일>end) return false;
-    return !!pigletReportBucketOf(g.자돈농장명);
+    return !!pigletReportBucketOf(pigletReportSourceOf(g));
   });
   const rows = groups.map(g=>{
     const 전입체중 = (g.두당체중!==undefined && g.두당체중!=='') ? Number(g.두당체중) : null;
     return {
-      motherFarm: pigletReportMotherFarmOf(g.자돈농장명),
-      bucket: pigletReportBucketOf(g.자돈농장명),
+      motherFarm: pigletReportMotherFarmOf(pigletReportSourceOf(g)),
+      bucket: pigletReportBucketOf(pigletReportSourceOf(g)),
       farm: g.농장명||'-', group: g.그룹명, manager: FARM_MANAGERS[(g.농장명||'').trim()]||'-',
       전입일: g.전입일||'-', 전입두수: Number(g.전입두수)||0, 전입일령: g.전입일령||'-',
       전입체중, lowWeight: 전입체중!==null && 전입체중<PIGLET_REPORT_LOW_WEIGHT,
